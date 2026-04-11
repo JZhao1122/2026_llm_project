@@ -217,6 +217,7 @@ def create_vllm_engines(
             "bundle_indices": bundle_indices,
             "num_gpus": 0.2 if use_hybrid_engine else 1,
             "enable_sleep_mode": vllm_enable_sleep,
+            "enable_log_requests": False,
         }
 
         actor_kwargs["remote_rm_url"] = remote_rm_url

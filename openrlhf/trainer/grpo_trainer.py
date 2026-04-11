@@ -153,9 +153,9 @@ class VLLMRolloutGenerator:
 
         rewards = None if reward is None else torch.tensor([float(reward)], dtype=torch.float32)
         return GRPOExperience(
-            sequences=sequences.unsqueeze(0),
-            attention_mask=attention_mask.unsqueeze(0),
-            action_mask=action_mask.unsqueeze(0),
+            sequences=sequences,
+            attention_mask=attention_mask,
+            action_mask=action_mask,
             rewards=rewards,
             prompts=[response["prompt"]],
             labels=[response["label"]],
