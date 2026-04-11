@@ -120,6 +120,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--vllm_num_engines", type=int, required=True)
     parser.add_argument("--vllm_tensor_parallel_size", type=int, default=1)
+    parser.add_argument("--vllm_sync_backend", type=str, default="nccl")
     parser.add_argument("--vllm_gpu_memory_utilization", type=float, default=0.9)
     parser.add_argument("--vllm_enable_sleep", action="store_true", default=False)
     parser.add_argument("--enable_prefix_caching", action="store_true", default=False)
