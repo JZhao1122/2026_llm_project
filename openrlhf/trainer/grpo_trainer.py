@@ -118,6 +118,14 @@ class VLLMRolloutGenerator:
         self.tokenizer = tokenizer
         self.vllm_engines = vllm_engines
 
+    def _sleep_vllm(self) -> None:
+        if not self.args.vllm_enable_sleep:
+            return
+        if self.args.deepspeed_enable_sleep:
+            batch_vllm_engine_call(self.vllm_engines, "sleep")
+        else:
+            batch_vllm_engine_call(self.vllm_engines, "sleep", level=2)
+
     def _response_to_experience(self, response, max_length: int) -> GRPOExperience:
         sequences = torch.tensor(response["observation_tokens"][:max_length], dtype=torch.long)
         attention_mask = torch.ones_like(sequences, dtype=torch.long)
@@ -191,8 +199,7 @@ class VLLMRolloutGenerator:
 
         responses_per_prompt = ray.get(refs)
 
-        if self.args.vllm_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "sleep", level=2)
+        self._sleep_vllm()
 
         samples = []
         for responses in responses_per_prompt:
@@ -455,7 +462,12 @@ class RayGRPOTrainer:
     def _policy_update(self, batches: List[GRPOExperience]) -> Dict[str, float]:
         """Push experience to actor workers and run clipped PPO-style gradient steps."""
         ray.get(self.actor_model_group.async_run_method_batch(method_name="append", experience=batches))
-        status_list = ray.get(self.actor_model_group.async_run_method(method_name="fit", kl_ctl=self.kl_ctl.value))
+        if self.args.deepspeed_enable_sleep:
+            ray.get(self.actor_model_group.async_run_method(method_name="reload_states"))
+            status_list = ray.get(self.actor_model_group.async_run_method(method_name="fit", kl_ctl=self.kl_ctl.value))
+            ray.get(self.actor_model_group.async_run_method(method_name="offload_states"))
+        else:
+            status_list = ray.get(self.actor_model_group.async_run_method(method_name="fit", kl_ctl=self.kl_ctl.value))
         return status_list[0]
 
     # --------------------------------------------------------
@@ -467,9 +479,8 @@ class RayGRPOTrainer:
         if self.args.vllm_enable_sleep:
             batch_vllm_engine_call(self.rollout_generator.vllm_engines, "wake_up", tags=["weights"])
         ray.get(self.actor_model_group.async_run_method(method_name="broadcast_to_vllm"))
-        if self.args.vllm_enable_sleep:
-            # Unlike official PPO, this GRPO path does not offload the actor after training.
-            # Deep-sleep vLLM so both weights and KV cache are released before the next rollout.
+        if self.args.vllm_enable_sleep and not self.args.deepspeed_enable_sleep:
+            # Without DeepSpeed state offload, leave GRPO on the safer deep-sleep fallback.
             batch_vllm_engine_call(self.rollout_generator.vllm_engines, "sleep", level=2)
 
     # --------------------------------------------------------

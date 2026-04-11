@@ -172,6 +172,7 @@ def create_vllm_engines(
     shared_pg=None,
     gpu_memory_utilization=None,
     vllm_enable_sleep=False,
+    deepspeed_enable_sleep=False,
     logprobs_mode=None,
     remote_rm_url=None,
 ):
@@ -238,7 +239,10 @@ def create_vllm_engines(
         )
 
     if vllm_enable_sleep:
-        batch_vllm_engine_call(vllm_engines, "sleep", level=2)
+        if deepspeed_enable_sleep:
+            batch_vllm_engine_call(vllm_engines, "sleep")
+        else:
+            batch_vllm_engine_call(vllm_engines, "sleep", level=2)
 
     return vllm_engines
 

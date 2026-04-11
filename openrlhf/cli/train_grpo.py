@@ -55,6 +55,7 @@ def train(args):
         actor_ref_pg if args.colocate_all_models else None,
         args.vllm_gpu_memory_utilization,
         args.vllm_enable_sleep,
+        args.deepspeed_enable_sleep,
         remote_rm_url=args.remote_rm_url,
     )
 
@@ -123,6 +124,12 @@ if __name__ == "__main__":
     parser.add_argument("--vllm_sync_backend", type=str, default="nccl")
     parser.add_argument("--vllm_gpu_memory_utilization", type=float, default=0.9)
     parser.add_argument("--vllm_enable_sleep", action="store_true", default=False)
+    parser.add_argument(
+        "--deepspeed_enable_sleep",
+        action="store_true",
+        default=False,
+        help="Enable DeepSpeed state offload/reload for GRPO colocated sleep mode.",
+    )
     parser.add_argument("--enable_prefix_caching", action="store_true", default=False)
     parser.add_argument("--enforce_eager", action="store_true", default=False)
 
@@ -223,6 +230,11 @@ if __name__ == "__main__":
     if args.vllm_enable_sleep and not args.colocate_all_models:
         print("Set args.vllm_enable_sleep to False when args.colocate_all_models is disabled.")
         args.vllm_enable_sleep = False
+    if args.deepspeed_enable_sleep and not args.colocate_all_models:
+        print("Set args.deepspeed_enable_sleep to False when args.colocate_all_models is disabled.")
+        args.deepspeed_enable_sleep = False
+    if args.vllm_enable_sleep and not args.deepspeed_enable_sleep:
+        print("GRPO is using deep-sleep fallback because --deepspeed_enable_sleep is disabled.")
     assert (
         args.rollout_batch_size * args.n_samples_per_prompt % args.micro_rollout_batch_size == 0
     ), "rollout_batch_size * n_samples_per_prompt must be divisible by micro_rollout_batch_size"
