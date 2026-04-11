@@ -118,6 +118,14 @@ class VLLMRolloutGenerator:
         self.tokenizer = tokenizer
         self.vllm_engines = vllm_engines
 
+    def _wake_vllm(self) -> None:
+        if not self.args.vllm_enable_sleep:
+            return
+        if self.args.deepspeed_enable_sleep:
+            batch_vllm_engine_call(self.vllm_engines, "wake_up", tags=["kv_cache"])
+        else:
+            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+
     def _sleep_vllm(self) -> None:
         if not self.args.vllm_enable_sleep:
             return
@@ -170,9 +178,17 @@ class VLLMRolloutGenerator:
             info=info,
         )
 
-    def generate(self, prompts: List[str], labels: List[str], *, temperature: float, num_samples: int) -> List[GRPOExperience]:
-        if self.args.vllm_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+    def generate(
+        self,
+        prompts: List[str],
+        labels: List[str],
+        *,
+        temperature: float,
+        num_samples: int,
+        manage_sleep: bool = True,
+    ) -> List[GRPOExperience]:
+        if manage_sleep:
+            self._wake_vllm()
 
         sampling_params = SamplingParams(
             temperature=temperature,
@@ -199,7 +215,8 @@ class VLLMRolloutGenerator:
 
         responses_per_prompt = ray.get(refs)
 
-        self._sleep_vllm()
+        if manage_sleep:
+            self._sleep_vllm()
 
         samples = []
         for responses in responses_per_prompt:
@@ -525,17 +542,37 @@ class RayGRPOTrainer:
         total = 0
         k = self.args.eval_n_samples_per_prompt
 
-        for _, prompts, labels in self.eval_dataloader:
-            samples = self.rollout_generator.generate(
-                prompts,
-                labels,
-                temperature=self.args.eval_temperature,
-                num_samples=k,
-            )
-            rewards = self._score_samples(samples).view(len(prompts), k)
-            pass_at_k += rewards.max(dim=-1).values.sum().item()
-            pass_at_1 += rewards.mean(dim=-1).sum().item()
-            total += len(prompts)
+        eval_pbar = tqdm(
+            self.eval_dataloader,
+            desc=f"Eval [{global_step}]",
+            disable=not self.strategy.is_rank_0(),
+        )
+
+        if self.args.vllm_enable_sleep:
+            self.rollout_generator._wake_vllm()
+
+        try:
+            for _, prompts, labels in eval_pbar:
+                samples = self.rollout_generator.generate(
+                    prompts,
+                    labels,
+                    temperature=self.args.eval_temperature,
+                    num_samples=k,
+                    manage_sleep=False,
+                )
+                rewards = self._score_samples(samples).view(len(prompts), k)
+                pass_at_k += rewards.max(dim=-1).values.sum().item()
+                pass_at_1 += rewards.mean(dim=-1).sum().item()
+                total += len(prompts)
+
+                if total > 0 and self.strategy.is_rank_0():
+                    postfix = {"pass1": pass_at_1 / total}
+                    if k > 1:
+                        postfix[f"pass{k}"] = pass_at_k / total
+                    eval_pbar.set_postfix(postfix)
+        finally:
+            if self.args.vllm_enable_sleep:
+                self.rollout_generator._sleep_vllm()
 
         if total == 0:
             return
