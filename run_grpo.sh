@@ -1,0 +1,45 @@
+export CUDA_VISIBLE_DEVICES=0,1
+export HF_DATASETS_OFFLINE=1
+cd /root/workspace/repos_zhaojian/2026_llm_project
+python3 -m openrlhf.cli.train_grpo \
+   --pretrain /root/workspace/_hf_models/Qwen/Qwen2.5-1.5B \
+   --reward_fn ./reward_func_gsm8k.py \
+   --prompt_data openai/gsm8k \
+   --prompt_split train \
+   --input_key question \
+   --label_key answer \
+   --colocate_all_models \
+   --max_samples 20000 \
+   --actor_num_nodes 1 \
+   --actor_num_gpus_per_node 2 \
+   --ref_num_nodes 1 \
+   --ref_num_gpus_per_node 2 \
+   --vllm_num_engines 1 \
+   --vllm_tensor_parallel_size 2 \
+   --vllm_gpu_memory_utilization 0.5 \
+   --vllm_enable_sleep \
+   --enforce_eager \
+   --n_samples_per_prompt 8 \
+   --rollout_batch_size 64 \
+   --micro_rollout_batch_size 8 \
+   --train_batch_size 128 \
+   --micro_train_batch_size 4 \
+   --prompt_max_len 512 \
+   --generate_max_len 1024 \
+   --num_episodes 1 \
+   --max_epochs 1 \
+   --actor_learning_rate 5e-7 \
+   --init_kl_coef 1e-3 \
+   --use_kl_loss \
+   --kl_estimator k3 \
+   --eps_clip 0.2 \
+   --gamma 1.0 \
+   --temperature 0.7 \
+   --zero_stage 2 \
+   --param_dtype bf16 \
+   --gradient_checkpointing \
+   --attn_implementation flash_attention_2 \
+   --save_path ./ckpt/qwen2.5-1.5b-grpo \
+   --save_steps 50 \
+   --logging_steps 10 \
+   --eval_steps -1
