@@ -121,10 +121,7 @@ class VLLMRolloutGenerator:
     def _wake_vllm(self) -> None:
         if not self.args.vllm_enable_sleep:
             return
-        if self.args.deepspeed_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "wake_up", tags=["kv_cache"])
-        else:
-            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+        batch_vllm_engine_call(self.vllm_engines, "wake_up")
 
     def _sleep_vllm(self) -> None:
         if not self.args.vllm_enable_sleep:
