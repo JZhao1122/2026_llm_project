@@ -6,6 +6,10 @@ python3 -m openrlhf.cli.train_grpo \
    --reward_fn ./reward_func_gsm8k.py \
    --prompt_data openai/gsm8k \
    --prompt_split train \
+   --eval_dataset gsm8k \
+   --eval_split test \
+   --eval_steps 5 \
+   --eval_n_samples_per_prompt 1 \
    --input_key question \
    --label_key answer \
    --colocate_all_models \
@@ -18,7 +22,6 @@ python3 -m openrlhf.cli.train_grpo \
    --vllm_tensor_parallel_size 2 \
    --vllm_gpu_memory_utilization 0.5 \
    --vllm_enable_sleep \
-   --deepspeed_enable_sleep \
    --enforce_eager \
    --n_samples_per_prompt 8 \
    --rollout_batch_size 64 \
@@ -41,6 +44,5 @@ python3 -m openrlhf.cli.train_grpo \
    --gradient_checkpointing \
    --attn_implementation flash_attention_2 \
    --save_path ./ckpt/qwen2.5-1.5b-grpo \
-   --save_steps 50 \
-   --logging_steps 10 \
-   --eval_steps -1
+   --save_steps 20 \
+   --logging_steps 1
