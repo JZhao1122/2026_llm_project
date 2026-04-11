@@ -172,6 +172,7 @@ def create_vllm_engines(
     shared_pg=None,
     gpu_memory_utilization=None,
     vllm_enable_sleep=False,
+    deepspeed_enable_sleep=False,
     logprobs_mode=None,
     remote_rm_url=None,
 ):
@@ -217,6 +218,7 @@ def create_vllm_engines(
             "bundle_indices": bundle_indices,
             "num_gpus": 0.2 if use_hybrid_engine else 1,
             "enable_sleep_mode": vllm_enable_sleep,
+            "disable_log_requests": True
         }
 
         actor_kwargs["remote_rm_url"] = remote_rm_url
@@ -237,7 +239,10 @@ def create_vllm_engines(
         )
 
     if vllm_enable_sleep:
-        batch_vllm_engine_call(vllm_engines, "sleep")
+        if deepspeed_enable_sleep:
+            batch_vllm_engine_call(vllm_engines, "sleep")
+        else:
+            batch_vllm_engine_call(vllm_engines, "sleep", level=2)
 
     return vllm_engines
 

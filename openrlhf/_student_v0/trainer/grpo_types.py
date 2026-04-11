@@ -3,43 +3,15 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-def zero_pad_sequences(
-    sequences: List[torch.Tensor], side: str = "left", value: int = 0, stack: bool = False
-) -> torch.Tensor:
-    assert side in ("left", "right")
-    max_len = max(seq.size(-1) for seq in sequences)
-    padded_sequences = []
-    for seq in sequences:
-        pad_len = max_len - seq.size(-1)
-        padding = (pad_len, 0) if side == "left" else (0, pad_len)
-        padded_sequences.append(F.pad(seq, padding, value=value))
-    if stack:
-        return torch.stack(padded_sequences, dim=0)
-    else:
-        return torch.cat(padded_sequences, dim=0)
-
-
-def remove_pad_token(input_ids: torch.Tensor, attention_mask: torch.Tensor):
-    """Remove the pad token. Return tensors and not lists.
-
-    Args:
-        input_ids shape: [bs, seq_length]
-        attention_mask shape: [bs, seq_length]
-    Returns:
-        no_padding_batch(List[Tensor[int]]): contains the rmpad token ids per query.
-    """
-    no_padding_batch = []
-    for ids, mask in zip(input_ids, attention_mask):
-        # Fix for both left and right padding
-        no_padding_batch.append((ids[mask.bool()]))
-    return no_padding_batch
+from ..utils.utils import zero_pad_sequences
 
 
 def _concat_optional_tensors(values: List[Optional[torch.Tensor]], pad_value: int = 0):
     tensors = [value for value in values if value is not None]
     if not tensors:
         return None
-    return zero_pad_sequences(tensors, side="right", value=pad_value, stack=True)
+    stack = tensors[0].dim() == 1
+    return zero_pad_sequences(tensors, side="right", value=pad_value, stack=stack)
 
 
 def _concat_info(values: List[Any]):
@@ -124,17 +96,33 @@ class GRPOExperience:
         if not experiences:
             raise ValueError("Cannot concatenate an empty experience list")
 
+        stack = experiences[0].sequences.dim() == 1
         info = {}
         keys = set()
         for experience in experiences:
             keys.update(experience.info.keys())
-        for key in keys:
+        for key in sorted(keys):
             info[key] = _concat_info([experience.info[key] for experience in experiences if key in experience.info])
 
         return GRPOExperience(
-            sequences=zero_pad_sequences([experience.sequences for experience in experiences], side="right", value=pad_token_id, stack=True),
-            attention_mask=zero_pad_sequences([experience.attention_mask for experience in experiences], side="right", value=0, stack=True),
-            action_mask=zero_pad_sequences([experience.action_mask for experience in experiences], side="right", value=0, stack=True).bool(),
+            sequences=zero_pad_sequences(
+                [experience.sequences for experience in experiences],
+                side="right",
+                value=pad_token_id,
+                stack=stack,
+            ),
+            attention_mask=zero_pad_sequences(
+                [experience.attention_mask for experience in experiences],
+                side="right",
+                value=0,
+                stack=stack,
+            ),
+            action_mask=zero_pad_sequences(
+                [experience.action_mask for experience in experiences],
+                side="right",
+                value=0,
+                stack=stack,
+            ).bool(),
             old_action_log_probs=_concat_optional_tensors([experience.old_action_log_probs for experience in experiences], pad_value=0),
             base_action_log_probs=_concat_optional_tensors([experience.base_action_log_probs for experience in experiences], pad_value=0),
             advantages=_concat_optional_tensors([experience.advantages for experience in experiences], pad_value=0),

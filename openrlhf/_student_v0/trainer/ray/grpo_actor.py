@@ -9,14 +9,16 @@ import torch
 from tqdm import tqdm
 from transformers.trainer import get_scheduler
 
-from openrlhf.models import PolicyLoss, PolicyModel, RewardModel
-from openrlhf.models.utils import compute_approx_kl, masked_mean
-from openrlhf.trainer.grpo_types import GRPOExperience
-from openrlhf.utils import get_tokenizer
-from openrlhf.utils.deepspeed import DeepspeedStrategy
-from openrlhf.utils.distributed_util import stateless_init_process_group, torch_dist_barrier_and_cuda_sync
+from ...models import PolicyLoss, PolicyModel, RewardModel
+from ...models.utils import compute_approx_kl, masked_mean
+from ...trainer.grpo_types import GRPOExperience
+from ...utils import get_tokenizer
+from ...utils.deepspeed import DeepspeedStrategy
+from ...utils.deepspeed.deepspeed_utils import offload_deepspeed_states, reload_deepspeed_states
+from ...utils.distributed_util import stateless_init_process_group, torch_dist_barrier_and_cuda_sync
 
 from .launcher import BaseModelActor
+from .utils import get_physical_gpu_id
 
 
 class _ExperienceBuffer:
@@ -151,12 +153,20 @@ class GRPOPolicyModelActor(BaseModelActor):
             _, states = strategy.load_ckpt(self.policy.model, ckpt_path)
             self.checkpoint_states.update(states)
 
+        backend = getattr(args, "vllm_sync_backend", "nccl")
+        self.use_cuda_ipc = backend == "nccl" and getattr(args, "colocate_all_models", False)
         self._model_update_group = None
-        if self.vllm_engines is not None and torch.distributed.get_rank() == 0:
-            self._init_vllm_sync_group()
+        if self.vllm_engines is not None and not self.use_cuda_ipc and torch.distributed.get_rank() == 0:
+            self._init_vllm_sync_group(backend)
+
+        if strategy.args.deepspeed_enable_sleep:
+            offload_deepspeed_states(self.policy.model)
         torch_dist_barrier_and_cuda_sync()
 
-    def _init_vllm_sync_group(self) -> None:
+    def _init_vllm_sync_group(self, backend: str) -> None:
+        if backend != "nccl":
+            raise ValueError(f"GRPO only supports --vllm_sync_backend nccl, got {backend!r}")
+
         master_address = ray._private.services.get_node_ip_address()
         with socket.socket() as sock:
             sock.bind(("", 0))
@@ -171,7 +181,7 @@ class GRPOPolicyModelActor(BaseModelActor):
                 i * args.vllm_tensor_parallel_size + 1,
                 world_size,
                 "openrlhf",
-                backend="nccl",
+                backend=backend,
                 use_ray=False,
             )
             for i, engine in enumerate(self.vllm_engines)
@@ -262,6 +272,7 @@ class GRPOPolicyModelActor(BaseModelActor):
         if not self.buffer:
             return {}
 
+        torch.cuda.empty_cache()
         experience = self.buffer.concat(self.tokenizer.pad_token_id)
         self.buffer.clear()
         num_samples = len(experience)
@@ -296,26 +307,72 @@ class GRPOPolicyModelActor(BaseModelActor):
                 mean_status[key] += status[key]
         for key in mean_status:
             mean_status[key] /= len(status_list)
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
         return mean_status
 
     def broadcast_to_vllm(self):
         if self.strategy.args.enable_prefix_caching and torch.distributed.get_rank() == 0:
             ray.get([engine.reset_prefix_cache.remote() for engine in self.vllm_engines])
 
+        torch.cuda.empty_cache()
         model = self.policy.model.module
-        for name, param in model.named_parameters():
+        num_params = len(list(model.named_parameters()))
+
+        def _broadcast_param(name, param):
+            shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
+            refs = [engine.update_weight.remote(name, dtype=param.dtype, shape=shape) for engine in self.vllm_engines]
+            self._model_update_group.broadcast(param.data, src=0, stream=torch.cuda.current_stream())
+            ray.get(refs)
+
+        def _handle_cuda_ipc(name, param, count):
+            from torch.multiprocessing.reductions import reduce_tensor
+
+            weight = param.data.clone()
+            ipc_handle = reduce_tensor(weight)
+
+            ipc_handle = {get_physical_gpu_id(): ipc_handle}
+            ipc_handle_list = [None] * torch.distributed.get_world_size()
+            torch.distributed.all_gather_object(ipc_handle_list, ipc_handle)
+
+            if torch.distributed.get_rank() == 0:
+                ipc_handles = {}
+                for d in ipc_handle_list:
+                    ipc_handles.update(d)
+
+                shape = param.shape if self.strategy.args.zero_stage != 3 else param.ds_shape
+                refs = [
+                    engine.update_weight_cuda_ipc.remote(
+                        name,
+                        dtype=param.dtype,
+                        shape=shape,
+                        ipc_handles=ipc_handles,
+                        empty_cache=count == num_params,
+                    )
+                    for engine in self.vllm_engines
+                ]
+                ray.get(refs)
+            torch_dist_barrier_and_cuda_sync()
+
+        for count, (name, param) in enumerate(model.named_parameters(), start=1):
             with deepspeed.zero.GatheredParameters([param], enabled=self.strategy.args.zero_stage == 3):
                 if torch.distributed.get_rank() == 0:
-                    refs = [
-                        engine.update_weight.remote(name, dtype=param.dtype, shape=param.shape)
-                        for engine in self.vllm_engines
-                    ]
-                    self._model_update_group.broadcast(param.data, src=0, stream=torch.cuda.current_stream())
-                    ray.get(refs)
+                    if self.use_cuda_ipc:
+                        _handle_cuda_ipc(name, param, count)
+                    else:
+                        _broadcast_param(name, param)
+                elif self.use_cuda_ipc:
+                    _handle_cuda_ipc(name, param, count)
         torch_dist_barrier_and_cuda_sync()
 
     def get_checkpoint_states(self):
         return self.checkpoint_states
+
+    def reload_states(self):
+        reload_deepspeed_states(self.policy.model)
+
+    def offload_states(self):
+        offload_deepspeed_states(self.policy.model)
 
     def save_checkpoint(self, tag: str, client_states):
         if not self.disable_ds_ckpt:

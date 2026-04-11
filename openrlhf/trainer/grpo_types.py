@@ -101,7 +101,7 @@ class GRPOExperience:
         keys = set()
         for experience in experiences:
             keys.update(experience.info.keys())
-        for key in keys:
+        for key in sorted(keys):
             info[key] = _concat_info([experience.info[key] for experience in experiences if key in experience.info])
 
         return GRPOExperience(

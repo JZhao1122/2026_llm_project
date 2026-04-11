@@ -433,8 +433,8 @@ class DeepspeedStrategy(ABC):
         assert op in ("mean", "max", "sum")
         if isinstance(data, dict):
             ret = {}
-            for k, v in data.items():
-                ret[k] = self.all_reduce(v, op)
+            for k in sorted(data.keys()):
+                ret[k] = self.all_reduce(data[k], op)
             return ret
         else:
             is_tensor = True
@@ -455,8 +455,8 @@ class DeepspeedStrategy(ABC):
     def all_gather(self, data):
         if isinstance(data, dict):
             ret = {}
-            for k, v in data.items():
-                ret[k] = self.all_gather(v)
+            for k in sorted(data.keys()):
+                ret[k] = self.all_gather(data[k])
             return ret
         else:
             if not isinstance(data, torch.Tensor):

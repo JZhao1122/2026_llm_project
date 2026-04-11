@@ -118,6 +118,22 @@ class VLLMRolloutGenerator:
         self.tokenizer = tokenizer
         self.vllm_engines = vllm_engines
 
+    def _wake_vllm(self) -> None:
+        if not self.args.vllm_enable_sleep:
+            return
+        if self.args.deepspeed_enable_sleep:
+            batch_vllm_engine_call(self.vllm_engines, "wake_up", tags=["kv_cache"])
+        else:
+            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+
+    def _sleep_vllm(self) -> None:
+        if not self.args.vllm_enable_sleep:
+            return
+        if self.args.deepspeed_enable_sleep:
+            batch_vllm_engine_call(self.vllm_engines, "sleep")
+        else:
+            batch_vllm_engine_call(self.vllm_engines, "sleep", level=2)
+
     def _response_to_experience(self, response, max_length: int) -> GRPOExperience:
         sequences = torch.tensor(response["observation_tokens"][:max_length], dtype=torch.long)
         attention_mask = torch.ones_like(sequences, dtype=torch.long)
@@ -153,18 +169,26 @@ class VLLMRolloutGenerator:
 
         rewards = None if reward is None else torch.tensor([float(reward)], dtype=torch.float32)
         return GRPOExperience(
-            sequences=sequences.unsqueeze(0),
-            attention_mask=attention_mask.unsqueeze(0),
-            action_mask=action_mask.unsqueeze(0),
+            sequences=sequences,
+            attention_mask=attention_mask,
+            action_mask=action_mask,
             rewards=rewards,
             prompts=[response["prompt"]],
             labels=[response["label"]],
             info=info,
         )
 
-    def generate(self, prompts: List[str], labels: List[str], *, temperature: float, num_samples: int) -> List[GRPOExperience]:
-        if self.args.vllm_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "wake_up")
+    def generate(
+        self,
+        prompts: List[str],
+        labels: List[str],
+        *,
+        temperature: float,
+        num_samples: int,
+        manage_sleep: bool = True,
+    ) -> List[GRPOExperience]:
+        if manage_sleep:
+            self._wake_vllm()
 
         sampling_params = SamplingParams(
             temperature=temperature,
@@ -191,8 +215,8 @@ class VLLMRolloutGenerator:
 
         responses_per_prompt = ray.get(refs)
 
-        if self.args.vllm_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "sleep")
+        if manage_sleep:
+            self._sleep_vllm()
 
         samples = []
         for responses in responses_per_prompt:
@@ -455,7 +479,12 @@ class RayGRPOTrainer:
     def _policy_update(self, batches: List[GRPOExperience]) -> Dict[str, float]:
         """Push experience to actor workers and run clipped PPO-style gradient steps."""
         ray.get(self.actor_model_group.async_run_method_batch(method_name="append", experience=batches))
-        status_list = ray.get(self.actor_model_group.async_run_method(method_name="fit", kl_ctl=self.kl_ctl.value))
+        if self.args.deepspeed_enable_sleep:
+            ray.get(self.actor_model_group.async_run_method(method_name="reload_states"))
+            status_list = ray.get(self.actor_model_group.async_run_method(method_name="fit", kl_ctl=self.kl_ctl.value))
+            ray.get(self.actor_model_group.async_run_method(method_name="offload_states"))
+        else:
+            status_list = ray.get(self.actor_model_group.async_run_method(method_name="fit", kl_ctl=self.kl_ctl.value))
         return status_list[0]
 
     # --------------------------------------------------------
@@ -464,7 +493,12 @@ class RayGRPOTrainer:
 
     def _sync_weights_to_vllm(self) -> None:
         """Broadcast updated actor weights to all vLLM inference engines."""
+        if self.args.vllm_enable_sleep:
+            batch_vllm_engine_call(self.rollout_generator.vllm_engines, "wake_up", tags=["weights"])
         ray.get(self.actor_model_group.async_run_method(method_name="broadcast_to_vllm"))
+        if self.args.vllm_enable_sleep and not self.args.deepspeed_enable_sleep:
+            # Without DeepSpeed state offload, leave GRPO on the safer deep-sleep fallback.
+            batch_vllm_engine_call(self.rollout_generator.vllm_engines, "sleep", level=2)
 
     # --------------------------------------------------------
     # Logging and checkpointing
@@ -508,17 +542,37 @@ class RayGRPOTrainer:
         total = 0
         k = self.args.eval_n_samples_per_prompt
 
-        for _, prompts, labels in self.eval_dataloader:
-            samples = self.rollout_generator.generate(
-                prompts,
-                labels,
-                temperature=self.args.eval_temperature,
-                num_samples=k,
-            )
-            rewards = self._score_samples(samples).view(len(prompts), k)
-            pass_at_k += rewards.max(dim=-1).values.sum().item()
-            pass_at_1 += rewards.mean(dim=-1).sum().item()
-            total += len(prompts)
+        eval_pbar = tqdm(
+            self.eval_dataloader,
+            desc=f"Eval [{global_step}]",
+            disable=not self.strategy.is_rank_0(),
+        )
+
+        if self.args.vllm_enable_sleep:
+            self.rollout_generator._wake_vllm()
+
+        try:
+            for _, prompts, labels in eval_pbar:
+                samples = self.rollout_generator.generate(
+                    prompts,
+                    labels,
+                    temperature=self.args.eval_temperature,
+                    num_samples=k,
+                    manage_sleep=False,
+                )
+                rewards = self._score_samples(samples).view(len(prompts), k)
+                pass_at_k += rewards.max(dim=-1).values.sum().item()
+                pass_at_1 += rewards.mean(dim=-1).sum().item()
+                total += len(prompts)
+
+                if total > 0 and self.strategy.is_rank_0():
+                    postfix = {"pass1": pass_at_1 / total}
+                    if k > 1:
+                        postfix[f"pass{k}"] = pass_at_k / total
+                    eval_pbar.set_postfix(postfix)
+        finally:
+            if self.args.vllm_enable_sleep:
+                self.rollout_generator._sleep_vllm()
 
         if total == 0:
             return

@@ -33,8 +33,8 @@ class WorkerWrap:
         import torch
 
         """Broadcast weight to all vllm workers from source rank 0 (actor model)"""
-        if torch.distributed.get_rank() == 0:
-            print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
+        # if torch.distributed.get_rank() == 0:
+        #     print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
 
         assert dtype == self.model_config.dtype, f"mismatch dtype: src {dtype}, dst {self.model_config.dtype}"
         weight = torch.empty(shape, dtype=dtype, device="cuda")
@@ -56,8 +56,8 @@ class WorkerWrap:
         import torch
         from openrlhf.trainer.ray.utils import get_physical_gpu_id
 
-        if torch.distributed.get_rank() == 0:
-            print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
+        # if torch.distributed.get_rank() == 0:
+        #     print(f"update weight: {name}, dtype: {dtype}, shape: {shape}")
 
         assert dtype == self.model_config.dtype, f"mismatch dtype: src {dtype}, dst {self.model_config.dtype}"
 
