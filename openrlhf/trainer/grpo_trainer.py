@@ -467,6 +467,10 @@ class RayGRPOTrainer:
         if self.args.vllm_enable_sleep:
             batch_vllm_engine_call(self.rollout_generator.vllm_engines, "wake_up", tags=["weights"])
         ray.get(self.actor_model_group.async_run_method(method_name="broadcast_to_vllm"))
+        if self.args.vllm_enable_sleep:
+            # Unlike official PPO, this GRPO path does not offload the actor after training.
+            # Keep vLLM fully asleep after sync to avoid waking KV cache on top of actor memory.
+            batch_vllm_engine_call(self.rollout_generator.vllm_engines, "sleep")
 
     # --------------------------------------------------------
     # Logging and checkpointing
