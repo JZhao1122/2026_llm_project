@@ -464,6 +464,8 @@ class RayGRPOTrainer:
 
     def _sync_weights_to_vllm(self) -> None:
         """Broadcast updated actor weights to all vLLM inference engines."""
+        if self.args.vllm_enable_sleep:
+            batch_vllm_engine_call(self.vllm_engines, "wake_up", tags=["weights"])
         ray.get(self.actor_model_group.async_run_method(method_name="broadcast_to_vllm"))
 
     # --------------------------------------------------------
