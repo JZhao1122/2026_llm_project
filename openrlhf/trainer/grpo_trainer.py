@@ -192,7 +192,7 @@ class VLLMRolloutGenerator:
         responses_per_prompt = ray.get(refs)
 
         if self.args.vllm_enable_sleep:
-            batch_vllm_engine_call(self.vllm_engines, "sleep")
+            batch_vllm_engine_call(self.vllm_engines, "sleep", level=2)
 
         samples = []
         for responses in responses_per_prompt:
@@ -469,8 +469,8 @@ class RayGRPOTrainer:
         ray.get(self.actor_model_group.async_run_method(method_name="broadcast_to_vllm"))
         if self.args.vllm_enable_sleep:
             # Unlike official PPO, this GRPO path does not offload the actor after training.
-            # Keep vLLM fully asleep after sync to avoid waking KV cache on top of actor memory.
-            batch_vllm_engine_call(self.rollout_generator.vllm_engines, "sleep")
+            # Deep-sleep vLLM so both weights and KV cache are released before the next rollout.
+            batch_vllm_engine_call(self.rollout_generator.vllm_engines, "sleep", level=2)
 
     # --------------------------------------------------------
     # Logging and checkpointing
