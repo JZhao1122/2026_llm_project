@@ -10,7 +10,8 @@ def _concat_optional_tensors(values: List[Optional[torch.Tensor]], pad_value: in
     tensors = [value for value in values if value is not None]
     if not tensors:
         return None
-    return zero_pad_sequences(tensors, side="right", value=pad_value, stack=True)
+    stack = tensors[0].dim() == 1
+    return zero_pad_sequences(tensors, side="right", value=pad_value, stack=stack)
 
 
 def _concat_info(values: List[Any]):
@@ -95,6 +96,7 @@ class GRPOExperience:
         if not experiences:
             raise ValueError("Cannot concatenate an empty experience list")
 
+        stack = experiences[0].sequences.dim() == 1
         info = {}
         keys = set()
         for experience in experiences:
@@ -103,9 +105,24 @@ class GRPOExperience:
             info[key] = _concat_info([experience.info[key] for experience in experiences if key in experience.info])
 
         return GRPOExperience(
-            sequences=zero_pad_sequences([experience.sequences for experience in experiences], side="right", value=pad_token_id, stack=True),
-            attention_mask=zero_pad_sequences([experience.attention_mask for experience in experiences], side="right", value=0, stack=True),
-            action_mask=zero_pad_sequences([experience.action_mask for experience in experiences], side="right", value=0, stack=True).bool(),
+            sequences=zero_pad_sequences(
+                [experience.sequences for experience in experiences],
+                side="right",
+                value=pad_token_id,
+                stack=stack,
+            ),
+            attention_mask=zero_pad_sequences(
+                [experience.attention_mask for experience in experiences],
+                side="right",
+                value=0,
+                stack=stack,
+            ),
+            action_mask=zero_pad_sequences(
+                [experience.action_mask for experience in experiences],
+                side="right",
+                value=0,
+                stack=stack,
+            ).bool(),
             old_action_log_probs=_concat_optional_tensors([experience.old_action_log_probs for experience in experiences], pad_value=0),
             base_action_log_probs=_concat_optional_tensors([experience.base_action_log_probs for experience in experiences], pad_value=0),
             advantages=_concat_optional_tensors([experience.advantages for experience in experiences], pad_value=0),
