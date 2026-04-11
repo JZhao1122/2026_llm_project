@@ -22,6 +22,7 @@ python3 -m openrlhf.cli.train_grpo \
    --vllm_tensor_parallel_size 2 \
    --vllm_gpu_memory_utilization 0.5 \
    --vllm_enable_sleep \
+   --deepspeed_enable_sleep \
    --enforce_eager \
    --n_samples_per_prompt 8 \
    --rollout_batch_size 64 \

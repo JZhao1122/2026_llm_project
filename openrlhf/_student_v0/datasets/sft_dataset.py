@@ -1,5 +1,6 @@
 from typing import Callable
 from torch.utils.data import Dataset
+from openrlhf.utils.utils import zero_pad_sequences
 
 class SFTDataset(Dataset):
     def __init__(
@@ -41,3 +42,17 @@ class SFTDataset(Dataset):
         # ====== YOUR CODE HERE ======
         raise NotImplementedError()
         # ====== END YOUR CODE ======
+
+    def collate_fn(self, item_list):
+        input_ids = []
+        attention_masks = []
+        loss_masks = []
+        for input_id, attention_mask, loss_mask in item_list:
+            input_ids.append(input_id)
+            attention_masks.append(attention_mask)
+            loss_masks.append(loss_mask)
+
+        input_ids = zero_pad_sequences(input_ids, "right", self.tokenizer.pad_token_id)
+        attention_masks = zero_pad_sequences(attention_masks, "right")
+        loss_masks = zero_pad_sequences(loss_masks, "right")
+        return input_ids, attention_masks, loss_masks
