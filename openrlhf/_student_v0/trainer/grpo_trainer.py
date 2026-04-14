@@ -10,7 +10,6 @@ from vllm import SamplingParams
 
 from ..datasets import PromptDataset
 from ..datasets.utils import blending_datasets
-from ..models.utils import compute_approx_kl, compute_reward, masked_mean
 from ..trainer.grpo_types import GRPOExperience
 from ..trainer.ray import batch_vllm_engine_call
 from ..utils.logging_utils import JsonlLogger, init_logger
@@ -389,8 +388,14 @@ class RayGRPOTrainer:
         self, batches: List[GRPOExperience]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Normalize rewards within each prompt group (the core GRPO idea).
+        TODO: Normalize rewards within each prompt group (the core GRPO idea).
 
+        Helpful notes:
+            - `batches` is a list of `GRPOExperience` micro-batches.
+            - `batch.action_mask` has shape [batch_size, len].
+            - `old_log_probs` and `base_log_probs` have shape [batch_size, len].
+            - `normalized_rewards` and `group_reward_std` are flat tensors over all sampled responses.
+        
         For each prompt with N sampled responses, the advantage is:
             A_i = (r_i - mean(r_1..N)) / (std(r_1..N) + eps)
 
@@ -398,29 +403,13 @@ class RayGRPOTrainer:
             normalized_rewards: per-sample normalized reward (flat tensor)
             group_reward_std:   per-sample group std for logging (flat tensor)
         """
-        flat_rewards = torch.cat([b.rewards.float().reshape(-1) for b in batches], dim=0)
-        group_rewards = flat_rewards.view(-1, self.args.n_samples_per_prompt)
-
-        mean = group_rewards.mean(dim=-1, keepdim=True)
-        std = group_rewards.std(dim=-1, keepdim=True)
-        normalized_rewards = (group_rewards - mean) / (std + 1e-9)
-
-        group_reward_std = std.repeat(1, self.args.n_samples_per_prompt).reshape(-1)
-        return normalized_rewards.reshape(-1), group_reward_std
+        # ====== YOUR CODE HERE ======
+        raise NotImplementedError()
+        # ====== END YOUR CODE ======
 
     # --------------------------------------------------------
     # Step 5: Compute KL penalty and returns
     # --------------------------------------------------------
-
-    def _compute_discounted_returns(self, token_rewards: torch.Tensor, action_mask: torch.Tensor) -> torch.Tensor:
-        """Compute discounted cumulative returns from per-token rewards."""
-        returns = torch.zeros_like(token_rewards)
-        running = torch.zeros(token_rewards.size(0), device=token_rewards.device)
-        masked_rewards = token_rewards * action_mask
-        for t in reversed(range(token_rewards.size(1))):
-            running = masked_rewards[:, t] + self.args.gamma * running
-            returns[:, t] = running
-        return returns
 
     def _compute_kl_and_returns(
         self,
@@ -431,46 +420,32 @@ class RayGRPOTrainer:
         group_reward_std: torch.Tensor,
     ) -> None:
         """
-        For each micro-batch, compute:
-            - KL(pi_actor || pi_ref) as a per-token penalty
-            - Token-level rewards = group-normalized advantage at EOS + KL penalty
-            - Discounted returns from token-level rewards
+        TODO: For each micro-batch, compute per-token KL penalty, token-level rewards,
+        and discounted returns, then write the results back into each batch.
 
-        Mutates batches in-place to set old_action_log_probs, returns, advantages, etc.
+        Helpful notes:
+            - `batches` is a list of `GRPOExperience` micro-batches.
+            - `batch.action_mask` has shape [batch_size, len].
+            - `old_log_probs` and `base_log_probs` have shape [batch_size, len].
+            - `normalized_rewards` and `group_reward_std` are flat tensors over all sampled responses.
+
+        You should update each batch in-place by setting:
+            - `batch.old_action_log_probs`: [batch_size, len], sampled action-token
+                log probabilities under the current/behavior policy before the update.
+            - `batch.base_action_log_probs`: [batch_size, len] or `None`, sampled
+                action-token log probabilities under the reference/base policy.
+            - `batch.returns`: [batch_size, len], discounted cumulative token rewards.
+            - `batch.advantages`: [batch_size, len], optimization weights used by the
+                policy loss. Set them to a copy of `batch.returns`.
+            - (optionally) `batch.info["return"]`
+            - (optionally) `batch.info["group_reward_std"]`
+            - (optionally) `batch.info["kl"]`
         """
-        offset = 0
-        for batch, old_log_probs, base_log_probs in zip(batches, action_log_probs, ref_log_probs):
-            batch_size = len(batch)
-            reward_slice = normalized_rewards[offset : offset + batch_size].to(old_log_probs.device)
-            std_slice = group_reward_std[offset : offset + batch_size].to(old_log_probs.device)
-            offset += batch_size
-
-            # KL divergence between current policy and reference policy
-            if base_log_probs is not None and not self.args.use_kl_loss:
-                kl = compute_approx_kl(old_log_probs, base_log_probs, kl_estimator=self.args.kl_estimator)
-            else:
-                kl = torch.zeros_like(old_log_probs)
-
-            # Token-level rewards: place scalar advantage at EOS, subtract KL penalty elsewhere
-            token_rewards = compute_reward(
-                reward_slice,
-                self.kl_ctl.value,
-                kl,
-                action_mask=batch.action_mask,
-                reward_clip_range=self.args.reward_clip_range,
-            )
-
-            # Populate batch fields for the policy update
-            batch.old_action_log_probs = old_log_probs
-            batch.base_action_log_probs = base_log_probs if self.args.use_kl_loss else None
-            batch.returns = self._compute_discounted_returns(token_rewards, batch.action_mask)
-            batch.advantages = batch.returns.clone()
-
-            # Logging info
-            batch.info["return"] = token_rewards.sum(dim=-1).detach().cpu()
-            batch.info["group_reward_std"] = std_slice.detach().cpu()
-            if base_log_probs is not None and not self.args.use_kl_loss:
-                batch.info["kl"] = masked_mean(kl, batch.action_mask, dim=-1).detach().cpu()
+        from ..models.utils import compute_approx_kl
+        
+        # ====== YOUR CODE HERE ======
+        raise NotImplementedError()
+        # ====== END YOUR CODE ======
 
     # --------------------------------------------------------
     # Step 6: Policy gradient update

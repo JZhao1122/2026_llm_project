@@ -1,21 +1,6 @@
 # Student Assignment Guide: SFT First, Then GRPO
 
 This document is written for teaching use.
-The order is:
-
-1. `SFT`
-2. `GRPO`
-
-## Instructor Notes
-
-- The current student SFT skeleton leaves `__len__`, `__getitem__`, `SFTModel`, and `SFTLoss` for students.
-- One practical issue: [`_student_v0/datasets/sft_dataset.py`](./datasets/sft_dataset.py) currently does **not** define `collate_fn`, but [`_student_v0/cli/train_sft.py`](./cli/train_sft.py) calls `train_dataset.collate_fn`.
-- If you want the SFT assignment to run end-to-end, you should either:
-  - add `collate_fn` yourself, or
-  - list `collate_fn` as an extra student task.
-- For a clean first assignment, I recommend asking students to support the **single-turn** case first. `multiturn` and `apply_chat_template` can be treated as extension tasks.
-
----
 
 ## Part 1: SFT
 
@@ -177,38 +162,6 @@ loss = mean( - per_token_logps ) over valid response tokens only
 ```
 
 This is the minimal SFT objective in this repo.
-
-### Common Mistakes In SFT
-
-- forgetting to append `eos_token`
-- applying loss on prompt tokens
-- using `loss_mask` with shape `[B, T]` against `per_token_logps` with shape `[B, T-1]`
-- missing the `P - 1` alignment in the response mask
-- letting padding tokens contribute to the loss
-- returning logits instead of `log probabilities`
-
-### Suggested Minimal Self-Checks
-
-You can ask students to verify these points:
-
-1. `input_ids.shape == attention_mask.shape == loss_mask.shape`
-2. after batching and `squeeze(1)`, model output shape is `[B, T-1]`
-3. `loss_mask[:, :-1]` has the same shape as `per_token_log_probs`
-4. prompt tokens are masked out
-5. response tokens are counted
-
-### Suggested Scope
-
-For the first version of the assignment, I recommend:
-
-- required:
-  - single-turn prompt/response SFT
-  - `prompt_template` support
-  - masked response-only loss
-- optional bonus:
-  - `apply_chat_template`
-  - `multiturn`
-  - a dataset-side `collate_fn`
 
 ---
 

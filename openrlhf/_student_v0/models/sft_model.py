@@ -1,4 +1,6 @@
 import torch.nn as nn
+from transformers import AutoModelForCausalLM
+from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
 
 class SFTModel(nn.Module):
@@ -14,12 +16,25 @@ class SFTModel(nn.Module):
         **kwargs
     ) -> None:
         super().__init__()
-        '''
-        TODO: Init the model
-        '''
-        # ====== YOUR CODE HERE ======
-        raise NotImplementedError()
-        # ====== END YOUR CODE ======
+        self._ds_config_helper = None
+
+        if isinstance(model_name_or_path, str):
+            if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
+                self._ds_config_helper = HfDeepSpeedConfig(ds_config)
+
+            from openrlhf.utils.utils import convert_to_torch_dtype
+
+            torch_dtype = convert_to_torch_dtype(param_dtype)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name_or_path,
+                trust_remote_code=True,
+                attn_implementation=attn_implementation,
+                torch_dtype=torch_dtype,
+                device_map=device_map,
+            )
+            self.model.config.use_cache = False
+        else:
+            self.model = model_name_or_path
 
     def forward(self, input_ids, attention_mask, **kwargs):
         '''

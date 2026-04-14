@@ -36,6 +36,8 @@ def blending_datasets(
 
         data_dir = dataset.split("@")[1].strip() if "@" in dataset else None
         dataset = dataset.split("@")[0].strip()
+        data_name = dataset.split("#")[1].strip() if "#" in dataset else None
+        dataset = dataset.split("#")[0].strip()
         dataset_basename = os.path.basename(dataset)
 
         ext = os.path.splitext(dataset)[-1]
