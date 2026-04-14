@@ -1,8 +1,7 @@
 export CUDA_VISIBLE_DEVICES=0,1
 export HF_ENDPOINT=https://hf-mirror.com
 export HF_TOKEN="xxx"
-cd /root/workspace/2026_llm_project
-python3 -m openrlhf.cli.train_grpo \
+python3 -m src.cli.train_grpo \
    --pretrain Qwen/Qwen2.5-1.5B \
    --reward_fn ./reward_func_gsm8k.py \
    --prompt_data openai/gsm8k#main \

@@ -1,6 +1,5 @@
 export CUDA_VISIBLE_DEVICES=0,1
-cd /root/workspace/repos_zhaojian/2026_llm_project
-deepspeed --module openrlhf.cli.train_sft \
+deepspeed --module src.cli.train_sft \
    --pretrain /root/workspace/_hf_models/Qwen/Qwen2.5-1.5B \
    --dataset openai/gsm8k \
    --dataset_split train \

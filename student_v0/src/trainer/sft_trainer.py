@@ -5,7 +5,7 @@ import torch
 from torch.optim import Optimizer
 from tqdm import tqdm
 
-from models import SFTLoss
+from ..models.loss import SFTLoss
 from ..utils.distributed_sampler import DistributedSampler
 from ..utils.logging_utils import JsonlLogger
 

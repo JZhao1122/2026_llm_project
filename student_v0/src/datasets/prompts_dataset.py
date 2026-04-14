@@ -8,17 +8,23 @@ class PromptDataset(Dataset):
     def __init__(
         self,
         dataset,
+        tokenizer,
         input_key,
         label_key,
         **kwargs
     ) -> None:
         super().__init__()
         self.dataset = dataset
+        self.tokenizer = tokenizer
         self.input_key = input_key
         self.label_key = label_key
+        self.prompt_template = kwargs.get("prompt_template")
+        self.apply_chat_template = kwargs.get("apply_chat_template", False)
+        self.tokenizer_chat_template = kwargs.get("tokenizer_chat_template")
 
+        show_progress = kwargs.get("show_progress", True)
         self.datasources = []
-        iterator = tqdm(dataset, desc="Preprocessing prompts")
+        iterator = tqdm(dataset, desc="Preprocessing prompts", disable=not show_progress)
         for data in iterator:
             self.datasources.append(data.get("datasource", "default"))
         
