@@ -14,5 +14,7 @@ python -m src.cli.eval_model \
   --tasks gsm8k \
   --gsm8k_tensor_parallel_size "${GSM8K_TP_SIZE:-1}" \
   --gsm8k_batch_size "${GSM8K_BATCH_SIZE:-32}" \
+  --gsm8k_temperature "${GSM8K_TEMPERATURE:-0.6}" \
+  --gsm8k_num_repeats "${GSM8K_NUM_REPEATS:-3}" \
   --gsm8k_gpu_memory_utilization "${GSM8K_GPU_MEMORY_UTILIZATION:-0.9}" \
   "$@"

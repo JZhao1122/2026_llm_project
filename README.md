@@ -91,6 +91,8 @@ bash eval_mmlu.sh ./ckpt/qwen2.5-1.5b-sft
 bash eval_all_sft_ckpts.sh
 ```
 
+By default, `eval_gsm8k.sh` now uses `temperature=0.6` and runs `3` sampled repeats, then reports the mean accuracy in `gsm8k.accuracy`. The per-repeat accuracies are also saved in the JSON output as `repeat_accuracies`, and the standard deviation is saved as `std_accuracy`. Override them with `GSM8K_TEMPERATURE` and `GSM8K_NUM_REPEATS` when needed.
+
 ## Key Runtime Variables
 
 - `PRETRAIN_PATH`: base model id or local checkpoint path

@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import re
 from collections import defaultdict
@@ -71,7 +72,7 @@ def build_gsm8k_prompt(question: str) -> str:
     )
 
 
-def evaluate_gsm8k(args, tokenizer) -> Dict[str, float]:
+def evaluate_gsm8k_once(args, tokenizer, repeat_idx: int = 0) -> Dict[str, float]:
     from vllm import LLM, SamplingParams
 
     dataset = load_dataset_from_repo(args.gsm8k_dataset, args.gsm8k_split, args.gsm8k_max_samples)
@@ -81,7 +82,7 @@ def evaluate_gsm8k(args, tokenizer) -> Dict[str, float]:
         "dtype": "bfloat16" if args.param_dtype == "bf16" else "float16",
         "trust_remote_code": True,
         "gpu_memory_utilization": args.gsm8k_gpu_memory_utilization,
-        "seed": args.seed,
+        "seed": args.seed + repeat_idx * args.gsm8k_seed_stride,
         "disable_log_stats": True,
     }
     if args.gsm8k_max_model_len is not None:
@@ -142,6 +143,35 @@ def evaluate_gsm8k(args, tokenizer) -> Dict[str, float]:
     del llm
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    return results
+
+
+def evaluate_gsm8k(args, tokenizer) -> Dict[str, float]:
+    repeats = max(args.gsm8k_num_repeats, 1)
+    repeat_results = [evaluate_gsm8k_once(args, tokenizer, repeat_idx=repeat_idx) for repeat_idx in range(repeats)]
+
+    accuracies = [result["accuracy"] for result in repeat_results]
+    mean_accuracy = sum(accuracies) / repeats
+    variance = sum((accuracy - mean_accuracy) ** 2 for accuracy in accuracies) / repeats
+
+    results = dict(repeat_results[0])
+    results["accuracy"] = mean_accuracy
+    results["num_repeats"] = repeats
+    results["temperature"] = args.gsm8k_temperature
+    results["repeat_accuracies"] = accuracies
+    results["std_accuracy"] = math.sqrt(variance)
+
+    if repeats > 1:
+        results["repeat_results"] = [
+            {
+                "repeat_index": repeat_idx,
+                "seed": args.seed + repeat_idx * args.gsm8k_seed_stride,
+                "accuracy": repeat_result["accuracy"],
+                "preview_examples": repeat_result["preview_examples"],
+            }
+            for repeat_idx, repeat_result in enumerate(repeat_results)
+        ]
+
     return results
 
 
@@ -365,6 +395,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gsm8k_max_new_tokens", type=int, default=512)
     parser.add_argument("--gsm8k_temperature", type=float, default=0.0)
     parser.add_argument("--gsm8k_top_p", type=float, default=1.0)
+    parser.add_argument("--gsm8k_num_repeats", type=int, default=1)
+    parser.add_argument("--gsm8k_seed_stride", type=int, default=1)
     parser.add_argument("--gsm8k_tensor_parallel_size", type=int, default=1)
     parser.add_argument("--gsm8k_gpu_memory_utilization", type=float, default=0.9)
     parser.add_argument("--gsm8k_max_model_len", type=int, default=None)
