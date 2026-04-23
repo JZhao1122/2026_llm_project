@@ -42,6 +42,12 @@ else
 fi
 
 EXTRA_ARGS=()
+if [[ "${GRPO_COLOCATE_ALL_MODELS:-1}" == "1" ]]; then
+  EXTRA_ARGS+=(--colocate_all_models)
+fi
+if [[ "${GRPO_COLOCATE_ACTOR_REF:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--colocate_actor_ref)
+fi
 if [[ "${GRPO_SAVE_HF_CKPT:-0}" == "1" ]]; then
   EXTRA_ARGS+=(--save_hf_ckpt)
 fi
@@ -66,7 +72,6 @@ python3 -m src.cli.train_grpo \
    --eval_n_samples_per_prompt "${GRPO_EVAL_SAMPLES_PER_PROMPT:-1}" \
    --input_key "${GRPO_INPUT_KEY:-question}" \
    --label_key "${GRPO_LABEL_KEY:-answer}" \
-   --colocate_all_models \
    --max_samples "${GRPO_MAX_SAMPLES:-20000}" \
    --actor_num_nodes "${GRPO_ACTOR_NUM_NODES:-1}" \
    --actor_num_gpus_per_node "${GRPO_ACTOR_GPUS_PER_NODE}" \
