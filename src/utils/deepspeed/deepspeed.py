@@ -381,7 +381,7 @@ class DeepspeedStrategy(ABC):
         extracted_model = self._extract_model(model)
 
         # gather parameters
-        if self.args.zero_stage > 2 or self.args.ds_tensor_parallel_size > 1:
+        if self.args.zero_stage > 2 or self.ds_tensor_parallel_size > 1:
             output_state_dict = extracted_model._consolidated_16bit_state_dict()
         else:
             from deepspeed.checkpoint.utils import clone_tensors_for_torch_save
