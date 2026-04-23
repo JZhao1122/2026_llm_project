@@ -84,7 +84,10 @@ class DeepspeedStrategy(ABC):
         self.time_steps = defaultdict(int)
 
     def _is_wrapper(self, model) -> bool:
-        return hasattr(model, "model")
+        # Our lightweight wrappers expose the actual HF model on `.model`, but
+        # Hugging Face causal LMs also use the same attribute for their backbone.
+        # Unwrapping the latter would drop the LM head during save_pretrained().
+        return hasattr(model, "model") and not isinstance(model, transformers.PreTrainedModel)
 
     def _extract_model(self, model):
         return model.model if self._is_wrapper(model) else model
@@ -209,10 +212,10 @@ class DeepspeedStrategy(ABC):
         )
 
     def _unwrap_model(self, model) -> nn.Module:
-        if self._is_wrapper(model):
+        if hasattr(model, "module"):
+            return self._unwrap_model(model.module)
+        elif self._is_wrapper(model):
             return self._unwrap_model(model.model)
-        elif hasattr(model, "module"):
-            return model.module
         else:
             return model
 
