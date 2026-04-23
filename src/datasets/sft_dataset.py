@@ -3,7 +3,7 @@ from typing import Callable
 import torch
 from torch.utils.data import Dataset
 
-from openrlhf.utils.utils import zero_pad_sequences
+from ..utils.utils import zero_pad_sequences
 
 
 def preprocess_sft_sample(

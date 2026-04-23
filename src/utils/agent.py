@@ -5,7 +5,7 @@ from typing import Optional
 
 import aiohttp
 
-from openrlhf.utils.logging_utils import init_logger
+from .logging_utils import init_logger
 
 logger = init_logger(__name__)
 

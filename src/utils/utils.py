@@ -23,7 +23,7 @@ def convert_to_torch_dtype(param_dtype: str) -> torch.dtype:
 
 
 def get_strategy(args):
-    from openrlhf.utils.deepspeed import DeepspeedStrategy
+    from .deepspeed import DeepspeedStrategy
 
     strategy = DeepspeedStrategy(
         seed=getattr(args, "seed", 42),

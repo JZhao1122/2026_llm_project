@@ -24,7 +24,7 @@ class SFTModel(nn.Module):
             if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
                 self._ds_config_helper = HfDeepSpeedConfig(ds_config)
 
-            from openrlhf.utils.utils import convert_to_torch_dtype
+            from ..utils.utils import convert_to_torch_dtype
 
             torch_dtype = convert_to_torch_dtype(param_dtype)
             self.model = AutoModelForCausalLM.from_pretrained(

@@ -8,7 +8,7 @@ from typing import Dict, Iterable, List, Sequence, Tuple
 import torch
 from tqdm import tqdm
 
-from openrlhf.utils.utils import convert_to_torch_dtype, get_tokenizer
+from ..utils.utils import convert_to_torch_dtype, get_tokenizer
 
 
 CHOICE_LETTERS: Tuple[str, ...] = ("A", "B", "C", "D")
@@ -32,7 +32,7 @@ def maybe_limit_dataset(dataset, max_samples: int):
 
 
 def load_dataset_from_repo(dataset_name: str, split: str, max_samples: int):
-    from openrlhf.datasets.utils import blending_datasets
+    from ..datasets.utils import blending_datasets
 
     dataset = blending_datasets(dataset_name, None, dataset_split=split, is_rank_0=True)
     return maybe_limit_dataset(dataset, max_samples)

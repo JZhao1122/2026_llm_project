@@ -11,7 +11,7 @@ from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from vllm.inputs import TokensPrompt
 from vllm.utils import random_uuid
 
-from openrlhf.utils.agent import SingleTurnRolloutExecutor
+from ...utils.agent import SingleTurnRolloutExecutor
 
 from .utils import get_bundle_indices, ray_noset_visible_devices
 
@@ -205,7 +205,7 @@ def create_vllm_engines(
         actor_kwargs = {
             "model": pretrain,
             "enforce_eager": enforce_eager,
-            "worker_extension_cls": "openrlhf.trainer.ray.vllm_worker_wrap.WorkerWrap",
+            "worker_extension_cls": "src.trainer.ray.vllm_worker_wrap.WorkerWrap",
             "tensor_parallel_size": tensor_parallel_size,
             "seed": seed + i,
             "distributed_executor_backend": distributed_executor_backend,

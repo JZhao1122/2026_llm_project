@@ -8,12 +8,12 @@ import torch
 from tqdm import tqdm
 from vllm import SamplingParams
 
-from openrlhf.datasets import PromptDataset
-from openrlhf.datasets.utils import blending_datasets
-from openrlhf.models.utils import compute_approx_kl, compute_reward, masked_mean
-from openrlhf.trainer.grpo_types import GRPOExperience
-from openrlhf.trainer.ray import batch_vllm_engine_call
-from openrlhf.utils.logging_utils import JsonlLogger, init_logger
+from ..datasets import PromptDataset
+from ..datasets.utils import blending_datasets
+from ..models.utils import compute_approx_kl, compute_reward, masked_mean
+from .grpo_types import GRPOExperience
+from .ray import batch_vllm_engine_call
+from ..utils.logging_utils import JsonlLogger, init_logger
 
 logger = init_logger(__name__)
 

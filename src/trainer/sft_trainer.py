@@ -5,9 +5,9 @@ import torch
 from torch.optim import Optimizer
 from tqdm import tqdm
 
-from openrlhf.models import SFTLoss
-from openrlhf.utils.distributed_sampler import DistributedSampler
-from openrlhf.utils.logging_utils import JsonlLogger
+from ..models import SFTLoss
+from ..utils.distributed_sampler import DistributedSampler
+from ..utils.logging_utils import JsonlLogger
 
 
 class SFTTrainer(ABC):

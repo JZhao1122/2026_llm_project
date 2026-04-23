@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 
 import torch
 
-from openrlhf.utils.utils import zero_pad_sequences
+from ..utils.utils import zero_pad_sequences
 
 
 def _concat_optional_tensors(values: List[Optional[torch.Tensor]], pad_value: int = 0):

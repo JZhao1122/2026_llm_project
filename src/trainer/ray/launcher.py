@@ -9,8 +9,8 @@ from ray.util.placement_group import PlacementGroup, placement_group
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 from tqdm import tqdm
 
-from openrlhf.trainer.ray.utils import ray_noset_visible_devices
-from openrlhf.utils.deepspeed import DeepspeedStrategy
+from .utils import ray_noset_visible_devices
+from ...utils.deepspeed import DeepspeedStrategy
 
 
 class BaseDistributedActor:

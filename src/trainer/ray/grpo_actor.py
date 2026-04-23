@@ -9,13 +9,13 @@ import torch
 from tqdm import tqdm
 from transformers.trainer import get_scheduler
 
-from openrlhf.models import PolicyLoss, PolicyModel, RewardModel
-from openrlhf.models.utils import compute_approx_kl, masked_mean
-from openrlhf.trainer.grpo_types import GRPOExperience
-from openrlhf.utils import get_tokenizer
-from openrlhf.utils.deepspeed import DeepspeedStrategy
-from openrlhf.utils.deepspeed.deepspeed_utils import offload_deepspeed_states, reload_deepspeed_states
-from openrlhf.utils.distributed_util import stateless_init_process_group, torch_dist_barrier_and_cuda_sync
+from ...models import PolicyLoss, PolicyModel, RewardModel
+from ...models.utils import compute_approx_kl, masked_mean
+from ..grpo_types import GRPOExperience
+from ...utils import get_tokenizer
+from ...utils.deepspeed import DeepspeedStrategy
+from ...utils.deepspeed.deepspeed_utils import offload_deepspeed_states, reload_deepspeed_states
+from ...utils.distributed_util import stateless_init_process_group, torch_dist_barrier_and_cuda_sync
 
 from .launcher import BaseModelActor
 from .utils import get_physical_gpu_id

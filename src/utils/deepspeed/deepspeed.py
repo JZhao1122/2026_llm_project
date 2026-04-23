@@ -26,8 +26,8 @@ except ImportError:
 
     get_peft_model_state_dict = None
 
-from openrlhf.utils.distributed_sampler import DistributedSampler
-from openrlhf.utils.distributed_util import torch_dist_barrier_and_cuda_sync
+from ..distributed_sampler import DistributedSampler
+from ..distributed_util import torch_dist_barrier_and_cuda_sync
 from .deepspeed_utils import (
     _z3_params_to_fetch,
     get_eval_ds_config,
@@ -134,7 +134,7 @@ class DeepspeedStrategy(ABC):
         # get the group of the current device
         group = ds_device_mesh["sp"].get_group()
         self.ring_attn_rank = dist.get_rank(group=group)
-        from openrlhf.models.ring_attn_utils import set_ring_attn_group
+        from ...models.ring_attn_utils import set_ring_attn_group
 
         set_ring_attn_group(group)
         self._ring_attn_group = group
