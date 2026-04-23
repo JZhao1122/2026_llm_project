@@ -35,6 +35,15 @@ The default SFT dataset string uses the explicit config form `openai/gsm8k#main`
 - runs validation every `50` steps
 - saves intermediate HF checkpoints at each save step via `--save_hf_ckpt`
 
+To stop at a fixed optimizer step and retain every checkpoint directory, override the defaults explicitly, for example:
+
+```bash
+SFT_MAX_STEPS=300 \
+SFT_MAX_CKPT_NUM=1000 \
+SFT_MAX_CKPT_MEM=100000000 \
+bash run_sft.sh
+```
+
 GRPO:
 
 ```bash
@@ -53,7 +62,8 @@ bash eval_all_sft_ckpts.sh
 
 - `PRETRAIN_PATH`: base model id or local checkpoint path
 - `SFT_SAVE_PATH`, `SFT_CKPT_PATH`, `SFT_SAVE_STEPS`: SFT output and checkpoint cadence
-- `SFT_MAX_EPOCHS`, `SFT_EVAL_RATIO`, `SFT_EVAL_STEPS`: SFT training duration and validation split/cadence
+- `SFT_MAX_EPOCHS`, `SFT_MAX_STEPS`, `SFT_EVAL_RATIO`, `SFT_EVAL_STEPS`: SFT training duration and validation split/cadence
+- `SFT_MAX_CKPT_NUM`, `SFT_MAX_CKPT_MEM`: checkpoint retention limits passed to DeepSpeed
 - `SFT_EVAL_OUTPUT_DIR`: output directory for `eval_all_sft_ckpts.sh`
 - `GRPO_SAVE_PATH`, `GRPO_CKPT_PATH`, `GRPO_SAVE_STEPS`: GRPO output and checkpoint cadence
 - `CUDA_VISIBLE_DEVICES`: GPU selection

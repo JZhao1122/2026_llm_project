@@ -14,6 +14,7 @@ deepspeed --module src.cli.train_sft \
    --output_key "${SFT_OUTPUT_KEY:-answer}" \
    --max_len "${SFT_MAX_LEN:-2048}" \
    --max_epochs "${SFT_MAX_EPOCHS:-8}" \
+   --max_steps "${SFT_MAX_STEPS:--1}" \
    --train_batch_size "${SFT_TRAIN_BATCH_SIZE:-128}" \
    --micro_train_batch_size "${SFT_MICRO_TRAIN_BATCH_SIZE:-8}" \
    --learning_rate "${SFT_LEARNING_RATE:-5e-6}" \
@@ -29,4 +30,6 @@ deepspeed --module src.cli.train_sft \
    --eval_ratio "${SFT_EVAL_RATIO:-0.05}" \
    --logging_steps "${SFT_LOGGING_STEPS:-10}" \
    --save_steps "${SFT_SAVE_STEPS:-50}" \
-   --eval_steps "${SFT_EVAL_STEPS:-50}"
+   --eval_steps "${SFT_EVAL_STEPS:-50}" \
+   --max_ckpt_num "${SFT_MAX_CKPT_NUM:-3}" \
+   --max_ckpt_mem "${SFT_MAX_CKPT_MEM:-100000000}"

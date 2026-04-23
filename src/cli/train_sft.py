@@ -99,7 +99,7 @@ def train(args):
         )
 
     num_update_steps_per_epoch = len(train_dataset) // args.train_batch_size
-    max_steps = math.ceil(args.max_epochs * num_update_steps_per_epoch)
+    max_steps = args.max_steps if args.max_steps > 0 else math.ceil(args.max_epochs * num_update_steps_per_epoch)
     scheduler = get_scheduler(
         args.lr_scheduler,
         optim,
@@ -127,6 +127,7 @@ def train(args):
         scheduler=scheduler,
         batch_size=args.train_batch_size,
         max_epochs=args.max_epochs,
+        max_steps=max_steps,
         tokenizer=tokenizer,
         save_hf_ckpt=args.save_hf_ckpt,
         disable_ds_ckpt=args.disable_ds_ckpt,
@@ -162,6 +163,7 @@ if __name__ == "__main__":
     parser.add_argument("--attn_implementation", type=str, default="flash_attention_2")
 
     parser.add_argument("--max_epochs", type=int, default=2)
+    parser.add_argument("--max_steps", type=int, default=-1, help="Override total optimizer steps; -1 uses epochs.")
     parser.add_argument("--pretrain", type=str, default=None)
     parser.add_argument("--learning_rate", type=float, default=5e-6)
     parser.add_argument("--lr_warmup_ratio", type=float, default=0.03)

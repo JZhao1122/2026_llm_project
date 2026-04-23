@@ -21,6 +21,7 @@ class SFTTrainer(ABC):
         scheduler,
         batch_size: int = 1,
         max_epochs: int = 2,
+        max_steps: int | None = None,
         tokenizer=None,
         save_hf_ckpt: bool = False,
         disable_ds_ckpt: bool = False,
@@ -28,6 +29,7 @@ class SFTTrainer(ABC):
         super().__init__()
         self.strategy = strategy
         self.epochs = max_epochs
+        self.max_steps = max_steps
         self.batch_size = batch_size
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
@@ -53,6 +55,7 @@ class SFTTrainer(ABC):
 
         epoch_bar = tqdm(range(start_epoch, self.epochs), desc="Train epoch", disable=not self.strategy.is_rank_0())
         loss_sum = 0.0
+        reached_max_steps = False
         for epoch in range(start_epoch, self.epochs):
             if isinstance(self.train_dataloader.sampler, DistributedSampler):
                 self.train_dataloader.sampler.set_epoch(
@@ -92,10 +95,15 @@ class SFTTrainer(ABC):
                     global_step = step // self.strategy.accumulated_gradient
                     client_states = {"consumed_samples": global_step * args.train_batch_size}
                     self.save_logs_and_checkpoints(args, global_step, logs_dict, client_states)
+                    if self.max_steps is not None and global_step >= self.max_steps:
+                        reached_max_steps = True
+                        break
 
                 step += 1
 
             epoch_bar.update()
+            if reached_max_steps:
+                break
 
         if self.jsonl_logger is not None:
             self.jsonl_logger.close()
