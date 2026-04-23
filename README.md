@@ -66,6 +66,23 @@ If you need to avoid multi-GPU NCCL setup on the actor/reference side, disable `
 
 When actor/reference each run on a single GPU and the pod still has NCCL shared-memory issues, set `GRPO_DIST_BACKEND=gloo` so DeepSpeed actor initialization avoids NCCL.
 
+For a more stable 4-GPU layout, keep actor/reference on two GPUs and dedicate the other two GPUs to vLLM. Lowering `GRPO_VLLM_GPU_MEM_UTIL` to `0.3` leaves more headroom for KV-cache wakeups at the cost of rollout throughput:
+
+```bash
+PRETRAIN_PATH=/path/to/base-or-sft \
+GRPO_COLOCATE_ALL_MODELS=0 \
+GRPO_COLOCATE_ACTOR_REF=1 \
+GRPO_ACTOR_GPUS_PER_NODE=2 \
+GRPO_REF_GPUS_PER_NODE=2 \
+GRPO_VLLM_NUM_ENGINES=2 \
+GRPO_VLLM_TP_SIZE=1 \
+GRPO_VLLM_GPU_MEM_UTIL=0.3 \
+GRPO_GENERATE_MAX_LEN=256 \
+GRPO_ROLLOUT_BATCH_SIZE=32 \
+GRPO_MICRO_ROLLOUT_BATCH_SIZE=4 \
+bash run_grpo.sh
+```
+
 Evaluation:
 
 ```bash
@@ -85,8 +102,13 @@ bash eval_all_sft_ckpts.sh
 - `GRPO_SAVE_HF_CKPT`: set to `1` to additionally save `global_step*_hf` GRPO checkpoints
 - `GRPO_MAX_CKPT_NUM`, `GRPO_MAX_CKPT_MEM`: DeepSpeed retention limits for GRPO checkpoints
 - `GRPO_ACTOR_GPUS_PER_NODE`, `GRPO_REF_GPUS_PER_NODE`, `GRPO_VLLM_NUM_ENGINES`, `GRPO_VLLM_TP_SIZE`: GRPO parallelism layout across visible GPUs
+- `GRPO_VLLM_GPU_MEM_UTIL`: vLLM memory reservation target; reduce it when wake-up OOMs appear in colocated or tight layouts
 - `GRPO_COLOCATE_ALL_MODELS`, `GRPO_COLOCATE_ACTOR_REF`: toggle colocated GRPO layouts when the pod topology requires it
+- `GRPO_VLLM_ENABLE_SLEEP`, `GRPO_DEEPSPEED_ENABLE_SLEEP`: toggle the vLLM/DeepSpeed sleep path used by colocated layouts
+- `GRPO_VLLM_SYNC_BACKEND`: backend used for actor-to-vLLM weight sync when CUDA IPC is not active
 - `GRPO_DIST_BACKEND`: distributed backend for DeepSpeed actor/reference init, useful to switch to `gloo` on single-GPU roles
+- `GRPO_REF_REWARD_OFFLOAD`: enable DeepSpeed offload for reference/reward model evaluation states when memory is tight
+- `GRPO_ENABLE_PREFIX_CACHING`: opt into vLLM prefix caching if repeated prompt prefixes justify the extra cache usage
 - `NCCL_SHM_DISABLE`: set to `1` on pods with tiny `/dev/shm` to avoid NCCL shared-memory startup failures
 - `CUDA_VISIBLE_DEVICES`: GPU selection
 - `HF_ENDPOINT`, `HF_TOKEN`: Hugging Face mirror/auth settings when needed

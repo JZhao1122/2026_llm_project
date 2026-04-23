@@ -60,6 +60,18 @@ fi
 if [[ "${GRPO_USE_DS_UNIVERSAL_CKPT:-0}" == "1" ]]; then
   EXTRA_ARGS+=(--use_ds_universal_ckpt)
 fi
+if [[ "${GRPO_VLLM_ENABLE_SLEEP:-1}" == "1" ]]; then
+  EXTRA_ARGS+=(--vllm_enable_sleep)
+fi
+if [[ "${GRPO_DEEPSPEED_ENABLE_SLEEP:-1}" == "1" ]]; then
+  EXTRA_ARGS+=(--deepspeed_enable_sleep)
+fi
+if [[ "${GRPO_ENABLE_PREFIX_CACHING:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--enable_prefix_caching)
+fi
+if [[ "${GRPO_REF_REWARD_OFFLOAD:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--ref_reward_offload)
+fi
 
 python3 -m src.cli.train_grpo \
    --pretrain "${PRETRAIN_PATH:-Qwen/Qwen2.5-1.5B}" \
@@ -79,9 +91,8 @@ python3 -m src.cli.train_grpo \
    --ref_num_gpus_per_node "${GRPO_REF_GPUS_PER_NODE}" \
    --vllm_num_engines "${GRPO_VLLM_NUM_ENGINES}" \
    --vllm_tensor_parallel_size "${GRPO_VLLM_TP_SIZE}" \
+   --vllm_sync_backend "${GRPO_VLLM_SYNC_BACKEND:-nccl}" \
    --vllm_gpu_memory_utilization "${GRPO_VLLM_GPU_MEM_UTIL:-0.5}" \
-   --vllm_enable_sleep \
-   --deepspeed_enable_sleep \
    --enforce_eager \
    --n_samples_per_prompt "${GRPO_SAMPLES_PER_PROMPT:-8}" \
    --rollout_batch_size "${GRPO_ROLLOUT_BATCH_SIZE:-64}" \
