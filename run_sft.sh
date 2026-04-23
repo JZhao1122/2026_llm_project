@@ -9,7 +9,7 @@ export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
 deepspeed --module src.cli.train_sft \
    --pretrain "${PRETRAIN_PATH:-Qwen/Qwen2.5-1.5B}" \
-   --dataset "${SFT_DATASET:-openai/gsm8k}" \
+   --dataset "${SFT_DATASET:-openai/gsm8k#main}" \
    --dataset_split "${SFT_DATASET_SPLIT:-train}" \
    --input_key "${SFT_INPUT_KEY:-question}" \
    --output_key "${SFT_OUTPUT_KEY:-answer}" \

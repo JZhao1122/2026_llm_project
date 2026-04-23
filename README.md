@@ -26,6 +26,8 @@ SFT:
 PRETRAIN_PATH=/root/workspace/_hf_models/Qwen/Qwen2.5-1.5B bash run_sft.sh
 ```
 
+The default SFT dataset string uses the explicit config form `openai/gsm8k#main`.
+
 GRPO:
 
 ```bash
