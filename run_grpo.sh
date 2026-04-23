@@ -4,11 +4,55 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${REPO_ROOT}"
 
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
+if [[ -z "${CUDA_VISIBLE_DEVICES:-}" ]] && command -v nvidia-smi >/dev/null 2>&1; then
+  GPU_COUNT="$(nvidia-smi --query-gpu=index --format=csv,noheader | wc -l | tr -d ' ')"
+  if [[ "${GPU_COUNT}" -gt 0 ]]; then
+    export CUDA_VISIBLE_DEVICES="$(seq -s, 0 $((GPU_COUNT - 1)))"
+  fi
+fi
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
 if [[ -n "${HF_TOKEN:-}" ]]; then
   export HF_TOKEN
+fi
+
+VISIBLE_GPU_COUNT="$(python3 - <<'PY'
+import os
+
+cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "")
+gpu_ids = [item.strip() for item in cuda_visible_devices.split(",") if item.strip()]
+print(len(gpu_ids))
+PY
+)"
+if [[ "${VISIBLE_GPU_COUNT}" -lt 1 ]]; then
+  VISIBLE_GPU_COUNT=1
+fi
+
+GRPO_VLLM_NUM_ENGINES="${GRPO_VLLM_NUM_ENGINES:-1}"
+GRPO_ACTOR_GPUS_PER_NODE="${GRPO_ACTOR_GPUS_PER_NODE:-${VISIBLE_GPU_COUNT}}"
+GRPO_REF_GPUS_PER_NODE="${GRPO_REF_GPUS_PER_NODE:-${GRPO_ACTOR_GPUS_PER_NODE}}"
+if [[ -n "${GRPO_VLLM_TP_SIZE:-}" ]]; then
+  GRPO_VLLM_TP_SIZE="${GRPO_VLLM_TP_SIZE}"
+else
+  if (( VISIBLE_GPU_COUNT % GRPO_VLLM_NUM_ENGINES != 0 )); then
+    echo "VISIBLE_GPU_COUNT=${VISIBLE_GPU_COUNT} must be divisible by GRPO_VLLM_NUM_ENGINES=${GRPO_VLLM_NUM_ENGINES}" >&2
+    exit 1
+  fi
+  GRPO_VLLM_TP_SIZE="$((VISIBLE_GPU_COUNT / GRPO_VLLM_NUM_ENGINES))"
+fi
+
+EXTRA_ARGS=()
+if [[ "${GRPO_SAVE_HF_CKPT:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--save_hf_ckpt)
+fi
+if [[ "${GRPO_LOAD_CHECKPOINT:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--load_checkpoint)
+fi
+if [[ "${GRPO_DISABLE_DS_CKPT:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--disable_ds_ckpt)
+fi
+if [[ "${GRPO_USE_DS_UNIVERSAL_CKPT:-0}" == "1" ]]; then
+  EXTRA_ARGS+=(--use_ds_universal_ckpt)
 fi
 
 python3 -m src.cli.train_grpo \
@@ -25,11 +69,11 @@ python3 -m src.cli.train_grpo \
    --colocate_all_models \
    --max_samples "${GRPO_MAX_SAMPLES:-20000}" \
    --actor_num_nodes "${GRPO_ACTOR_NUM_NODES:-1}" \
-   --actor_num_gpus_per_node "${GRPO_ACTOR_GPUS_PER_NODE:-2}" \
+   --actor_num_gpus_per_node "${GRPO_ACTOR_GPUS_PER_NODE}" \
    --ref_num_nodes "${GRPO_REF_NUM_NODES:-1}" \
-   --ref_num_gpus_per_node "${GRPO_REF_GPUS_PER_NODE:-2}" \
-   --vllm_num_engines "${GRPO_VLLM_NUM_ENGINES:-1}" \
-   --vllm_tensor_parallel_size "${GRPO_VLLM_TP_SIZE:-2}" \
+   --ref_num_gpus_per_node "${GRPO_REF_GPUS_PER_NODE}" \
+   --vllm_num_engines "${GRPO_VLLM_NUM_ENGINES}" \
+   --vllm_tensor_parallel_size "${GRPO_VLLM_TP_SIZE}" \
    --vllm_gpu_memory_utilization "${GRPO_VLLM_GPU_MEM_UTIL:-0.5}" \
    --vllm_enable_sleep \
    --deepspeed_enable_sleep \
@@ -57,4 +101,7 @@ python3 -m src.cli.train_grpo \
    --save_path "${GRPO_SAVE_PATH:-./ckpt/qwen2.5-1.5b-grpo}" \
    --ckpt_path "${GRPO_CKPT_PATH:-./ckpt/checkpoints_grpo}" \
    --save_steps "${GRPO_SAVE_STEPS:-20}" \
-   --logging_steps "${GRPO_LOGGING_STEPS:-1}"
+   --max_ckpt_num "${GRPO_MAX_CKPT_NUM:-3}" \
+   --max_ckpt_mem "${GRPO_MAX_CKPT_MEM:-100000000}" \
+   --logging_steps "${GRPO_LOGGING_STEPS:-1}" \
+   "${EXTRA_ARGS[@]}"
