@@ -13,5 +13,6 @@ python -m src.cli.eval_model \
   --model_path "$MODEL_PATH" \
   --tasks mmlu \
   --mmlu_batch_size "${MMLU_BATCH_SIZE:-16}" \
-  --mmlu_device_map "${MMLU_DEVICE_MAP:-auto}" \
+  --mmlu_device_map "${MMLU_DEVICE_MAP:-none}" \
+  --mmlu_device "${MMLU_DEVICE:-cuda}" \
   "$@"

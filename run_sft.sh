@@ -4,7 +4,6 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "${REPO_ROOT}"
 
-export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1}"
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
 deepspeed --module src.cli.train_sft \
@@ -14,7 +13,7 @@ deepspeed --module src.cli.train_sft \
    --input_key "${SFT_INPUT_KEY:-question}" \
    --output_key "${SFT_OUTPUT_KEY:-answer}" \
    --max_len "${SFT_MAX_LEN:-2048}" \
-   --max_epochs "${SFT_MAX_EPOCHS:-3}" \
+   --max_epochs "${SFT_MAX_EPOCHS:-8}" \
    --train_batch_size "${SFT_TRAIN_BATCH_SIZE:-128}" \
    --micro_train_batch_size "${SFT_MICRO_TRAIN_BATCH_SIZE:-8}" \
    --learning_rate "${SFT_LEARNING_RATE:-5e-6}" \
@@ -26,6 +25,8 @@ deepspeed --module src.cli.train_sft \
    --param_dtype "${PARAM_DTYPE:-bf16}" \
    --gradient_checkpointing \
    --attn_implementation "${ATTN_IMPLEMENTATION:-flash_attention_2}" \
+   --save_hf_ckpt \
+   --eval_ratio "${SFT_EVAL_RATIO:-0.05}" \
    --logging_steps "${SFT_LOGGING_STEPS:-10}" \
    --save_steps "${SFT_SAVE_STEPS:-50}" \
-   --eval_steps "${SFT_EVAL_STEPS:--1}"
+   --eval_steps "${SFT_EVAL_STEPS:-50}"

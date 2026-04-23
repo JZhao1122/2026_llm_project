@@ -132,13 +132,17 @@ def evaluate_gsm8k(args, tokenizer) -> Dict[str, float]:
         if total > 0:
             progress.set_postfix({"accuracy": correct / total})
 
-    return {
+    results = {
         "dataset": args.gsm8k_dataset,
         "split": args.gsm8k_split,
         "num_examples": total,
         "accuracy": correct / total if total else 0.0,
         "preview_examples": predictions,
     }
+    del llm
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return results
 
 
 def resolve_choice_tokenization(tokenizer) -> Dict[str, object]:
@@ -222,13 +226,17 @@ def evaluate_mmlu(args, tokenizer) -> Dict[str, object]:
     model_kwargs = {
         "trust_remote_code": True,
         "torch_dtype": convert_to_torch_dtype(args.param_dtype),
-        "device_map": args.mmlu_device_map,
     }
+    if args.mmlu_device_map not in (None, "", "none"):
+        model_kwargs["device_map"] = args.mmlu_device_map
     if args.attn_implementation is not None:
         model_kwargs["attn_implementation"] = args.attn_implementation
 
     model = AutoModelForCausalLM.from_pretrained(args.model_path, **model_kwargs)
+    if "device_map" not in model_kwargs:
+        model = model.to(args.mmlu_device)
     model.eval()
+    model_device = next(model.parameters()).device
 
     tokenizer.padding_side = "right"
     if tokenizer.pad_token is None:
@@ -237,7 +245,7 @@ def evaluate_mmlu(args, tokenizer) -> Dict[str, object]:
         model.config.pad_token_id = tokenizer.pad_token_id
 
     choice_config = resolve_choice_tokenization(tokenizer)
-    choice_token_ids = torch.tensor(choice_config["token_ids"], dtype=torch.long)
+    choice_token_ids = torch.tensor(choice_config["token_ids"], dtype=torch.long, device=model_device)
 
     subject_totals: Dict[str, int] = defaultdict(int)
     subject_correct: Dict[str, int] = defaultdict(int)
@@ -274,8 +282,8 @@ def evaluate_mmlu(args, tokenizer) -> Dict[str, object]:
             add_special_tokens=False,
         )
         attention_mask = tokenized["attention_mask"]
-        input_ids = tokenized["input_ids"].to(model.device)
-        attention_mask_device = attention_mask.to(model.device)
+        input_ids = tokenized["input_ids"].to(model_device)
+        attention_mask_device = attention_mask.to(model_device)
 
         with torch.inference_mode():
             logits = model(input_ids=input_ids, attention_mask=attention_mask_device).logits.float()
@@ -283,7 +291,7 @@ def evaluate_mmlu(args, tokenizer) -> Dict[str, object]:
         last_token_indices = attention_mask.sum(dim=1).to(logits.device) - 1
         batch_indices = torch.arange(logits.shape[0], device=logits.device)
         next_token_logits = logits[batch_indices, last_token_indices, :]
-        option_logits = next_token_logits.index_select(dim=-1, index=choice_token_ids.to(logits.device))
+        option_logits = next_token_logits.index_select(dim=-1, index=choice_token_ids)
         predicted_indices = option_logits.argmax(dim=-1).tolist()
 
         for example, subject, gold_idx, pred_idx, prompt, logits_row in zip(
@@ -318,7 +326,7 @@ def evaluate_mmlu(args, tokenizer) -> Dict[str, object]:
         sum(subject_accuracies.values()) / len(subject_accuracies) if subject_accuracies else 0.0
     )
 
-    return {
+    results = {
         "dataset": args.mmlu_dataset,
         "split": args.mmlu_split,
         "num_examples": total,
@@ -329,6 +337,10 @@ def evaluate_mmlu(args, tokenizer) -> Dict[str, object]:
         "choice_tokenization": choice_config,
         "preview_examples": preview_examples,
     }
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return results
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -367,7 +379,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--mmlu_max_samples", type=int, default=-1)
     parser.add_argument("--mmlu_batch_size", type=int, default=16)
     parser.add_argument("--mmlu_max_len", type=int, default=2048)
-    parser.add_argument("--mmlu_device_map", type=str, default="auto")
+    parser.add_argument("--mmlu_device_map", type=str, default="none")
+    parser.add_argument("--mmlu_device", type=str, default="cuda")
 
     return parser
 

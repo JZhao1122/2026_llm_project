@@ -38,6 +38,26 @@ def train(args):
         is_rank_0=strategy.is_rank_0(),
     )
     train_data = train_data.select(range(min(args.max_samples, len(train_data))))
+
+    eval_data = None
+    if getattr(args, "eval_dataset", None):
+        eval_data = blending_datasets(
+            args.eval_dataset,
+            None,
+            dataset_split=args.eval_split,
+            is_rank_0=strategy.is_rank_0(),
+        )
+    elif args.eval_ratio > 0:
+        if not 0 < args.eval_ratio < 1:
+            raise ValueError(f"eval_ratio must be in (0, 1), got {args.eval_ratio}")
+        split_dataset = train_data.train_test_split(test_size=args.eval_ratio, seed=args.seed, shuffle=True)
+        train_data = split_dataset["train"]
+        eval_data = split_dataset["test"]
+        strategy.print(
+            f"Split {args.dataset} into train/eval with eval_ratio={args.eval_ratio}: "
+            f"{len(train_data)} train / {len(eval_data)} eval samples"
+        )
+
     train_dataset = SFTDataset(
         train_data,
         tokenizer,
@@ -58,8 +78,7 @@ def train(args):
     )
 
     eval_dataloader = None
-    if getattr(args, "eval_dataset", None):
-        eval_data = blending_datasets(args.eval_dataset, None, dataset_split=args.eval_split, is_rank_0=strategy.is_rank_0())
+    if eval_data is not None:
         eval_dataset = SFTDataset(
             eval_data,
             tokenizer,
@@ -155,6 +174,12 @@ if __name__ == "__main__":
     parser.add_argument("--eval_dataset", type=str, default=None, help="Path to the evaluation dataset")
     parser.add_argument("--dataset_split", type=str, default="train")
     parser.add_argument("--eval_split", type=str, default="train")
+    parser.add_argument(
+        "--eval_ratio",
+        type=float,
+        default=0.0,
+        help="If eval_dataset is unset, split this fraction from the loaded training data as validation.",
+    )
     parser.add_argument("--max_samples", type=int, default=1000000, help="Maximum number of samples to use")
     parser.add_argument("--multiturn", action="store_true", default=False, help="Use multiturn conversation data")
 

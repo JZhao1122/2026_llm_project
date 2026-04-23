@@ -9,6 +9,7 @@ The active code lives under `src/`. `student_v0/` is an archived baseline snapsh
 - `run_sft.sh`: launch supervised fine-tuning with `deepspeed --module src.cli.train_sft`
 - `run_grpo.sh`: launch GRPO with `python -m src.cli.train_grpo`
 - `eval_gsm8k.sh` / `eval_mmlu.sh`: standalone evaluation entrypoints
+- `eval_all_sft_ckpts.sh`: evaluate every saved SFT HF checkpoint plus the final export
 - `reward_func_gsm8k.py`: rule-based reward for GSM8K-style exact-match checking
 - `src/`: local package that mirrors the required training, model, dataset, and utility code
 
@@ -26,7 +27,13 @@ SFT:
 PRETRAIN_PATH=/root/workspace/_hf_models/Qwen/Qwen2.5-1.5B bash run_sft.sh
 ```
 
-The default SFT dataset string uses the explicit config form `openai/gsm8k#main`.
+The default SFT dataset string uses the explicit config form `openai/gsm8k#main`. By default, the script:
+
+- uses all visible GPUs unless `CUDA_VISIBLE_DEVICES` is set explicitly
+- trains for `8` epochs
+- splits `5%` of the loaded training set into validation via `--eval_ratio 0.05`
+- runs validation every `50` steps
+- saves intermediate HF checkpoints at each save step via `--save_hf_ckpt`
 
 GRPO:
 
@@ -39,12 +46,15 @@ Evaluation:
 ```bash
 bash eval_gsm8k.sh ./ckpt/qwen2.5-1.5b-sft
 bash eval_mmlu.sh ./ckpt/qwen2.5-1.5b-sft
+bash eval_all_sft_ckpts.sh
 ```
 
 ## Key Runtime Variables
 
 - `PRETRAIN_PATH`: base model id or local checkpoint path
 - `SFT_SAVE_PATH`, `SFT_CKPT_PATH`, `SFT_SAVE_STEPS`: SFT output and checkpoint cadence
+- `SFT_MAX_EPOCHS`, `SFT_EVAL_RATIO`, `SFT_EVAL_STEPS`: SFT training duration and validation split/cadence
+- `SFT_EVAL_OUTPUT_DIR`: output directory for `eval_all_sft_ckpts.sh`
 - `GRPO_SAVE_PATH`, `GRPO_CKPT_PATH`, `GRPO_SAVE_STEPS`: GRPO output and checkpoint cadence
 - `CUDA_VISIBLE_DEVICES`: GPU selection
 - `HF_ENDPOINT`, `HF_TOKEN`: Hugging Face mirror/auth settings when needed
