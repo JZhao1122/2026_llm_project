@@ -7,6 +7,10 @@ def exist_and_not_none(d, key):
     return key in d and d[key] is not None
 
 
+def _load_dataset_with_name(path, data_name=None, data_dir=None, **kwargs):
+    return load_dataset(path, name=data_name, data_dir=data_dir, **kwargs)
+
+
 def blending_datasets(
     datasets,
     probabilities=None,
@@ -42,7 +46,7 @@ def blending_datasets(
 
         ext = os.path.splitext(dataset)[-1]
         if ext == ".py" or (os.path.isdir(dataset) and os.path.exists(os.path.join(dataset, f"{dataset_basename}.py"))):
-            data = load_dataset(dataset, trust_remote_code=True)
+            data = _load_dataset_with_name(dataset, data_name=data_name, trust_remote_code=True)
             if is_rank_0:
                 print(f"loaded {dataset} with python script")
         elif ext in [".json", ".jsonl", ".csv", ".parquet", ".arrow"]:
@@ -60,11 +64,11 @@ def blending_datasets(
             except Exception as e:
                 if is_rank_0:
                     print(f"failed to load {dataset} from disk: {e}")
-                data = load_dataset(dataset, data_dir=data_dir)
+                data = _load_dataset_with_name(dataset, data_name=data_name, data_dir=data_dir)
                 if is_rank_0:
                     print(f"loaded {dataset} from files")
         else:
-            data = load_dataset(dataset, data_dir=data_dir)
+            data = _load_dataset_with_name(dataset, data_name=data_name, data_dir=data_dir)
             if is_rank_0:
                 print(f"loaded {dataset} from files")
 
