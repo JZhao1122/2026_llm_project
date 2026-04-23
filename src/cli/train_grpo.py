@@ -17,7 +17,19 @@ from ..utils import get_strategy, get_tokenizer
 
 def train(args):
     if not ray.is_initialized():
-        ray.init(runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}})
+        runtime_env_vars = {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}
+        for env_name in (
+            "NCCL_SHM_DISABLE",
+            "NCCL_P2P_DISABLE",
+            "NCCL_IB_DISABLE",
+            "NCCL_SOCKET_IFNAME",
+            "TRITON_CACHE_DIR",
+        ):
+            env_value = os.environ.get(env_name)
+            if env_value:
+                runtime_env_vars[env_name] = env_value
+
+        ray.init(runtime_env={"env_vars": runtime_env_vars})
 
     strategy = get_strategy(args)
     strategy.print(args)

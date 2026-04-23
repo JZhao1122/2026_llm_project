@@ -60,6 +60,8 @@ GRPO_SAVE_STEPS=10 \
 bash run_grpo.sh
 ```
 
+If the pod has a very small `/dev/shm`, NCCL can fail during Ray/DeepSpeed startup. In that case, export `NCCL_SHM_DISABLE=1` before launching GRPO so the setting propagates into Ray workers as well.
+
 Evaluation:
 
 ```bash
@@ -79,5 +81,6 @@ bash eval_all_sft_ckpts.sh
 - `GRPO_SAVE_HF_CKPT`: set to `1` to additionally save `global_step*_hf` GRPO checkpoints
 - `GRPO_MAX_CKPT_NUM`, `GRPO_MAX_CKPT_MEM`: DeepSpeed retention limits for GRPO checkpoints
 - `GRPO_ACTOR_GPUS_PER_NODE`, `GRPO_REF_GPUS_PER_NODE`, `GRPO_VLLM_NUM_ENGINES`, `GRPO_VLLM_TP_SIZE`: GRPO parallelism layout across visible GPUs
+- `NCCL_SHM_DISABLE`: set to `1` on pods with tiny `/dev/shm` to avoid NCCL shared-memory startup failures
 - `CUDA_VISIBLE_DEVICES`: GPU selection
 - `HF_ENDPOINT`, `HF_TOKEN`: Hugging Face mirror/auth settings when needed
