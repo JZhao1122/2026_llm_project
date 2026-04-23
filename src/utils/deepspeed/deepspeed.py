@@ -110,7 +110,11 @@ class DeepspeedStrategy(ABC):
             torch.cuda.set_device(local_rank)
 
         # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
-        deepspeed.init_distributed(timeout=timeout)
+        init_distributed_kwargs = {"timeout": timeout}
+        dist_backend = getattr(self.args, "dist_backend", None)
+        if dist_backend:
+            init_distributed_kwargs["dist_backend"] = dist_backend
+        deepspeed.init_distributed(**init_distributed_kwargs)
 
         # mesh
         self.world_size = dist.get_world_size()

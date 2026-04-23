@@ -158,6 +158,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_ds_universal_ckpt", action="store_true", default=False)
 
     parser.add_argument("--zero_stage", type=int, default=2)
+    parser.add_argument("--dist_backend", type=str, default="nccl", choices=["nccl", "gloo"])
     parser.add_argument("--local_rank", type=int, default=-1)
     parser.add_argument("--gradient_checkpointing", action="store_true", default=False)
     parser.add_argument("--param_dtype", type=str, default="bf16", choices=["bf16", "fp16"])

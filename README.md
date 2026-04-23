@@ -64,6 +64,8 @@ If the pod has a very small `/dev/shm`, NCCL can fail during Ray/DeepSpeed start
 
 If you need to avoid multi-GPU NCCL setup on the actor/reference side, disable `GRPO_COLOCATE_ALL_MODELS` and assign GPUs per role explicitly, for example `1` GPU for actor, `1` for reference, and `2` single-GPU vLLM engines.
 
+When actor/reference each run on a single GPU and the pod still has NCCL shared-memory issues, set `GRPO_DIST_BACKEND=gloo` so DeepSpeed actor initialization avoids NCCL.
+
 Evaluation:
 
 ```bash
@@ -84,6 +86,7 @@ bash eval_all_sft_ckpts.sh
 - `GRPO_MAX_CKPT_NUM`, `GRPO_MAX_CKPT_MEM`: DeepSpeed retention limits for GRPO checkpoints
 - `GRPO_ACTOR_GPUS_PER_NODE`, `GRPO_REF_GPUS_PER_NODE`, `GRPO_VLLM_NUM_ENGINES`, `GRPO_VLLM_TP_SIZE`: GRPO parallelism layout across visible GPUs
 - `GRPO_COLOCATE_ALL_MODELS`, `GRPO_COLOCATE_ACTOR_REF`: toggle colocated GRPO layouts when the pod topology requires it
+- `GRPO_DIST_BACKEND`: distributed backend for DeepSpeed actor/reference init, useful to switch to `gloo` on single-GPU roles
 - `NCCL_SHM_DISABLE`: set to `1` on pods with tiny `/dev/shm` to avoid NCCL shared-memory startup failures
 - `CUDA_VISIBLE_DEVICES`: GPU selection
 - `HF_ENDPOINT`, `HF_TOKEN`: Hugging Face mirror/auth settings when needed
