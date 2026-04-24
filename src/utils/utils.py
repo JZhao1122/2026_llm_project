@@ -38,7 +38,12 @@ def get_strategy(args):
 
 
 def get_tokenizer(pretrain, model, padding_side="left", strategy=None, use_fast=True):
-    tokenizer = AutoTokenizer.from_pretrained(pretrain, trust_remote_code=True, use_fast=use_fast)
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(pretrain, trust_remote_code=True, use_fast=use_fast)
+    except Exception:
+        if not use_fast:
+            raise
+        tokenizer = AutoTokenizer.from_pretrained(pretrain, trust_remote_code=True, use_fast=False)
     tokenizer.padding_side = padding_side
     # NOTE: When enable vLLM, do not resize_token_embeddings, or the vocab size will mismatch with vLLM.
     # https://github.com/facebookresearch/llama-recipes/pull/196
