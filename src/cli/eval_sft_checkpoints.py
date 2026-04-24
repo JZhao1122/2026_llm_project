@@ -74,17 +74,35 @@ def run_eval(repo_root: Path, model_path: str, save_path: Path, task: str, gpu_i
         task,
         "--save_path",
         str(save_path),
+        "--seed",
+        str(args.seed),
     ]
 
     if task == "gsm8k":
         cmd += [
+            "--gsm8k_prompt_mode",
+            args.gsm8k_prompt_mode,
             "--gsm8k_batch_size",
             str(args.gsm8k_batch_size),
+            "--gsm8k_max_new_tokens",
+            str(args.gsm8k_max_new_tokens),
+            "--gsm8k_temperature",
+            str(args.gsm8k_temperature),
+            "--gsm8k_top_p",
+            str(args.gsm8k_top_p),
+            "--gsm8k_num_repeats",
+            str(args.gsm8k_num_repeats),
+            "--gsm8k_seed_stride",
+            str(args.gsm8k_seed_stride),
             "--gsm8k_tensor_parallel_size",
             str(args.gsm8k_tensor_parallel_size),
             "--gsm8k_gpu_memory_utilization",
             str(args.gsm8k_gpu_memory_utilization),
         ]
+        if args.gsm8k_prompt_template is not None:
+            cmd += ["--gsm8k_prompt_template", args.gsm8k_prompt_template]
+        if args.gsm8k_max_samples is not None:
+            cmd += ["--gsm8k_max_samples", str(args.gsm8k_max_samples)]
         if args.gsm8k_max_model_len is not None:
             cmd += ["--gsm8k_max_model_len", str(args.gsm8k_max_model_len)]
         if args.gsm8k_enforce_eager:
@@ -161,7 +179,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tasks", type=str, default="gsm8k,mmlu")
     parser.add_argument("--include_final", action="store_true", default=False)
     parser.add_argument("--gpus", type=str, default=None, help="Optional comma-separated GPU ids. Defaults to all visible GPUs.")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--gsm8k_prompt_mode", type=str, default="raw", choices=["raw", "benchmark"])
+    parser.add_argument("--gsm8k_prompt_template", type=str, default=None)
+    parser.add_argument("--gsm8k_max_samples", type=int, default=-1)
     parser.add_argument("--gsm8k_batch_size", type=int, default=32)
+    parser.add_argument("--gsm8k_max_new_tokens", type=int, default=512)
+    parser.add_argument("--gsm8k_temperature", type=float, default=0.6)
+    parser.add_argument("--gsm8k_top_p", type=float, default=1.0)
+    parser.add_argument("--gsm8k_num_repeats", type=int, default=3)
+    parser.add_argument("--gsm8k_seed_stride", type=int, default=1)
     parser.add_argument("--gsm8k_tensor_parallel_size", type=int, default=1)
     parser.add_argument("--gsm8k_gpu_memory_utilization", type=float, default=0.9)
     parser.add_argument("--gsm8k_max_model_len", type=int, default=None)
@@ -210,6 +237,16 @@ def main():
                 "save_path": str(save_path),
                 "output_dir": str(output_dir),
                 "gpus": gpu_ids,
+                "seed": args.seed,
+                "gsm8k_config": {
+                    "prompt_mode": args.gsm8k_prompt_mode,
+                    "prompt_template": args.gsm8k_prompt_template,
+                    "temperature": args.gsm8k_temperature,
+                    "top_p": args.gsm8k_top_p,
+                    "num_repeats": args.gsm8k_num_repeats,
+                    "seed_stride": args.gsm8k_seed_stride,
+                    "max_new_tokens": args.gsm8k_max_new_tokens,
+                },
                 "results": serializable_results,
             },
             fout,

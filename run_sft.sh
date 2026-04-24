@@ -6,12 +6,17 @@ cd "${REPO_ROOT}"
 
 export HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
 
+if [[ -z "${SFT_PROMPT_TEMPLATE+x}" ]]; then
+   SFT_PROMPT_TEMPLATE="{}"
+fi
+
 deepspeed --module src.cli.train_sft \
    --pretrain "${PRETRAIN_PATH:-Qwen/Qwen2.5-1.5B}" \
    --dataset "${SFT_DATASET:-openai/gsm8k#main}" \
    --dataset_split "${SFT_DATASET_SPLIT:-train}" \
    --input_key "${SFT_INPUT_KEY:-question}" \
    --output_key "${SFT_OUTPUT_KEY:-answer}" \
+   --prompt_template "${SFT_PROMPT_TEMPLATE}" \
    --max_len "${SFT_MAX_LEN:-2048}" \
    --max_epochs "${SFT_MAX_EPOCHS:-8}" \
    --max_steps "${SFT_MAX_STEPS:--1}" \

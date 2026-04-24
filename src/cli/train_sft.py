@@ -187,7 +187,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--input_key", type=str, default="input")
     parser.add_argument("--output_key", type=str, default="output")
-    parser.add_argument("--prompt_template", type=str, default="User: {}\nAssistant: ")
+    parser.add_argument("--prompt_template", type=str, default="{}")
     parser.add_argument("--apply_chat_template", action="store_true", default=False)
     parser.add_argument("--tokenizer_chat_template", type=str, default=None)
     parser.add_argument("--max_len", type=int, default=2048, help="Max tokens per sample")

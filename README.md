@@ -30,6 +30,7 @@ PRETRAIN_PATH=/root/workspace/_hf_models/Qwen/Qwen2.5-1.5B bash run_sft.sh
 The default SFT dataset string uses the explicit config form `openai/gsm8k#main`. By default, the script:
 
 - uses all visible GPUs unless `CUDA_VISIBLE_DEVICES` is set explicitly
+- uses the raw `question` text as the SFT prompt via `--prompt_template "{}"`
 - trains for `8` epochs
 - splits `5%` of the loaded training set into validation via `--eval_ratio 0.05`
 - runs validation every `50` steps
@@ -93,6 +94,8 @@ bash eval_all_sft_ckpts.sh
 
 By default, `eval_gsm8k.sh` now uses the raw `question` text as the prompt so it matches the current GRPO training setup (`input_key=question` with no prompt template). It also uses `temperature=0.6` and runs `3` sampled repeats, then reports the mean accuracy in `gsm8k.accuracy`. The per-repeat accuracies are also saved in the JSON output as `repeat_accuracies`, and the standard deviation is saved as `std_accuracy`.
 
+`eval_all_sft_ckpts.sh` uses the same GSM8K defaults through `src.cli.eval_sft_checkpoints`, so per-checkpoint SFT evaluation stays aligned with the raw-template SFT/GRPO setup unless explicitly overridden.
+
 To switch back to the original benchmark-style GSM8K instruction prompt, set `GSM8K_PROMPT_MODE=benchmark`. If you need a custom prompt wrapper, pass `--gsm8k_prompt_template '...{}...'` through `eval_gsm8k.sh`.
 
 ## Key Runtime Variables
@@ -100,6 +103,7 @@ To switch back to the original benchmark-style GSM8K instruction prompt, set `GS
 - `PRETRAIN_PATH`: base model id or local checkpoint path
 - `SFT_SAVE_PATH`, `SFT_CKPT_PATH`, `SFT_SAVE_STEPS`: SFT output and checkpoint cadence
 - `SFT_MAX_EPOCHS`, `SFT_MAX_STEPS`, `SFT_EVAL_RATIO`, `SFT_EVAL_STEPS`: SFT training duration and validation split/cadence
+- `SFT_PROMPT_TEMPLATE`: SFT prompt wrapper, defaulting to raw `{}` for GSM8K question-only training
 - `SFT_MAX_CKPT_NUM`, `SFT_MAX_CKPT_MEM`: checkpoint retention limits passed to DeepSpeed
 - `SFT_EVAL_OUTPUT_DIR`: output directory for `eval_all_sft_ckpts.sh`
 - `GRPO_SAVE_PATH`, `GRPO_CKPT_PATH`, `GRPO_SAVE_STEPS`: GRPO output and checkpoint cadence
