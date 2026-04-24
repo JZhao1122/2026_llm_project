@@ -51,13 +51,22 @@ GRPO:
 PRETRAIN_PATH=./ckpt/qwen2.5-1.5b-sft HF_TOKEN=... bash run_grpo.sh
 ```
 
-By default, `run_grpo.sh` uses all visible GPUs, maps them into the colocated actor/ref/vLLM setup, saves DeepSpeed checkpoints every `GRPO_SAVE_STEPS`, and writes the final HF export to `GRPO_SAVE_PATH`. To also save intermediate HF checkpoints and retain more DeepSpeed checkpoint directories, override the defaults explicitly, for example:
+By default, `run_grpo.sh` uses all visible GPUs, maps them into the colocated actor/ref/vLLM setup, trains with standard GRPO group-normalized advantages, saves DeepSpeed checkpoints every `GRPO_SAVE_STEPS`, and writes the final HF export to `GRPO_SAVE_PATH`. To also save intermediate HF checkpoints and retain more DeepSpeed checkpoint directories, override the defaults explicitly, for example:
 
 ```bash
 PRETRAIN_PATH=./ckpt/checkpoints_sft_step200_keepall/global_step100_hf \
 GRPO_SAVE_HF_CKPT=1 \
 GRPO_MAX_CKPT_NUM=1000 \
 GRPO_SAVE_STEPS=10 \
+bash run_grpo.sh
+```
+
+To run REINFORCE++ instead of standard GRPO, set `GRPO_ADVANTAGE_ESTIMATOR=reinforce`. This mode allows `GRPO_SAMPLES_PER_PROMPT=1`, uses the raw scalar reward per response, computes KL-discounted returns, then normalizes token-level advantages across the rollout batch before the same clipped policy update:
+
+```bash
+PRETRAIN_PATH=/path/to/base-or-sft \
+GRPO_ADVANTAGE_ESTIMATOR=reinforce \
+GRPO_SAMPLES_PER_PROMPT=1 \
 bash run_grpo.sh
 ```
 
@@ -107,6 +116,7 @@ To switch back to the original benchmark-style GSM8K instruction prompt, set `GS
 - `SFT_MAX_CKPT_NUM`, `SFT_MAX_CKPT_MEM`: checkpoint retention limits passed to DeepSpeed
 - `SFT_EVAL_OUTPUT_DIR`: output directory for `eval_all_sft_ckpts.sh`
 - `GRPO_SAVE_PATH`, `GRPO_CKPT_PATH`, `GRPO_SAVE_STEPS`: GRPO output and checkpoint cadence
+- `GRPO_ADVANTAGE_ESTIMATOR`: advantage estimator, default `group_norm`; use `reinforce` for REINFORCE++ or `reinforce_baseline` for per-prompt mean subtraction plus batch token normalization
 - `GRPO_SAVE_HF_CKPT`: set to `1` to additionally save `global_step*_hf` GRPO checkpoints
 - `GRPO_MAX_CKPT_NUM`, `GRPO_MAX_CKPT_MEM`: DeepSpeed retention limits for GRPO checkpoints
 - `GRPO_ACTOR_GPUS_PER_NODE`, `GRPO_REF_GPUS_PER_NODE`, `GRPO_VLLM_NUM_ENGINES`, `GRPO_VLLM_TP_SIZE`: GRPO parallelism layout across visible GPUs

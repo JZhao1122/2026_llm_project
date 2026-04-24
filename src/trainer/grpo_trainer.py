@@ -229,17 +229,20 @@ class VLLMRolloutGenerator:
 
 class RayGRPOTrainer:
     """
-    Trainer implementing Group Relative Policy Optimization (GRPO).
+    Trainer implementing Group Relative Policy Optimization (GRPO) and
+    REINFORCE++-style policy updates.
 
     GRPO generates multiple responses per prompt, computes group-relative
     advantages by normalizing rewards within each prompt group, and updates
     the policy using a clipped surrogate objective with optional KL penalty.
+    REINFORCE++ uses the raw per-sample rewards, then normalizes token-level
+    advantages across the full rollout batch before the same clipped update.
 
     The training loop follows these steps for each batch of prompts:
         1. Generate rollouts   -- sample N responses per prompt via vLLM
         2. Compute log probs   -- get pi(a|s) from both actor and reference
         3. Compute rewards     -- score responses (rule-based or reward model)
-        4. Compute advantages  -- GRPO group normalization of rewards
+        4. Compute advantages  -- selected reward/advantage estimator
         5. Compute KL/returns  -- KL penalty + discounted return estimation
         6. Policy update       -- clipped PPO-style gradient steps
         7. Sync weights        -- broadcast updated params to vLLM engines
@@ -379,31 +382,74 @@ class RayGRPOTrainer:
             batch.info["score"] = reward.float()
 
     # --------------------------------------------------------
-    # Step 4: Compute GRPO group-relative advantages
+    # Step 4: Compute scalar policy advantages
     # --------------------------------------------------------
 
-    def _compute_grpo_advantages(
+    def _compute_scalar_advantages(
         self, batches: List[GRPOExperience]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        Normalize rewards within each prompt group (the core GRPO idea).
+        Compute one scalar policy signal per sampled response.
 
-        For each prompt with N sampled responses, the advantage is:
-            A_i = (r_i - mean(r_1..N)) / (std(r_1..N) + eps)
+        - group_norm: standard GRPO, (r_i - group_mean) / group_std
+        - reinforce: REINFORCE++, use raw rewards and normalize token advantages later
+        - reinforce_baseline: subtract group mean, then normalize token advantages later
 
         Returns:
-            normalized_rewards: per-sample normalized reward (flat tensor)
+            scalar_advantages: per-sample reward/advantage signal (flat tensor)
             group_reward_std:   per-sample group std for logging (flat tensor)
         """
         flat_rewards = torch.cat([b.rewards.float().reshape(-1) for b in batches], dim=0)
+        estimator = self.args.advantage_estimator
+
+        if estimator == "reinforce":
+            return flat_rewards, torch.zeros_like(flat_rewards)
+
+        if flat_rewards.numel() % self.args.n_samples_per_prompt != 0:
+            raise ValueError(
+                "Total rollout samples must be divisible by n_samples_per_prompt "
+                f"for {estimator}, got {flat_rewards.numel()} and {self.args.n_samples_per_prompt}."
+            )
         group_rewards = flat_rewards.view(-1, self.args.n_samples_per_prompt)
 
         mean = group_rewards.mean(dim=-1, keepdim=True)
         std = group_rewards.std(dim=-1, keepdim=True)
-        normalized_rewards = (group_rewards - mean) / (std + 1e-9)
+        if estimator == "group_norm":
+            scalar_advantages = (group_rewards - mean) / (std + 1e-9)
+        elif estimator == "reinforce_baseline":
+            scalar_advantages = group_rewards - mean
+        else:
+            raise ValueError(f"Unsupported advantage_estimator: {estimator}")
 
         group_reward_std = std.repeat(1, self.args.n_samples_per_prompt).reshape(-1)
-        return normalized_rewards.reshape(-1), group_reward_std
+        return scalar_advantages.reshape(-1), group_reward_std
+
+    def _normalize_token_advantages(self, batches: List[GRPOExperience]) -> None:
+        """REINFORCE++ normalizes token-level advantages over the whole rollout batch."""
+        if self.args.advantage_estimator not in ("reinforce", "reinforce_baseline"):
+            return
+
+        values = []
+        for batch in batches:
+            if batch.advantages is None:
+                continue
+            mask = batch.action_mask.bool()
+            if mask.any():
+                values.append(batch.advantages[mask].float())
+
+        if not values:
+            return
+
+        flat = torch.cat(values, dim=0)
+        mean = flat.mean()
+        std = flat.std(unbiased=False).clamp(min=1e-8)
+
+        for batch in batches:
+            mask = batch.action_mask.bool()
+            normalized = (batch.advantages.float() - mean.to(batch.advantages.device)) / std.to(batch.advantages.device)
+            batch.advantages = torch.where(mask, normalized.to(batch.advantages.dtype), torch.zeros_like(batch.advantages))
+            batch.info["advantage_mean"] = torch.full((len(batch),), mean.detach().cpu().item(), dtype=torch.float32)
+            batch.info["advantage_std"] = torch.full((len(batch),), std.detach().cpu().item(), dtype=torch.float32)
 
     # --------------------------------------------------------
     # Step 5: Compute KL penalty and returns
@@ -424,13 +470,13 @@ class RayGRPOTrainer:
         batches: List[GRPOExperience],
         action_log_probs: List[torch.Tensor],
         ref_log_probs: List[Optional[torch.Tensor]],
-        normalized_rewards: torch.Tensor,
+        scalar_advantages: torch.Tensor,
         group_reward_std: torch.Tensor,
     ) -> None:
         """
         For each micro-batch, compute:
             - KL(pi_actor || pi_ref) as a per-token penalty
-            - Token-level rewards = group-normalized advantage at EOS + KL penalty
+            - Token-level rewards = scalar policy advantage at EOS + KL penalty
             - Discounted returns from token-level rewards
 
         Mutates batches in-place to set old_action_log_probs, returns, advantages, etc.
@@ -438,7 +484,7 @@ class RayGRPOTrainer:
         offset = 0
         for batch, old_log_probs, base_log_probs in zip(batches, action_log_probs, ref_log_probs):
             batch_size = len(batch)
-            reward_slice = normalized_rewards[offset : offset + batch_size].to(old_log_probs.device)
+            reward_slice = scalar_advantages[offset : offset + batch_size].to(old_log_probs.device)
             std_slice = group_reward_std[offset : offset + batch_size].to(old_log_probs.device)
             offset += batch_size
 
@@ -612,13 +658,14 @@ class RayGRPOTrainer:
                 # Step 3: Score responses with reward model (if not already scored by rules)
                 self._score_with_reward_model(batches)
 
-                # Step 4: Compute GRPO group-relative advantages
-                normalized_rewards, group_reward_std = self._compute_grpo_advantages(batches)
+                # Step 4: Compute scalar policy advantages
+                scalar_advantages, group_reward_std = self._compute_scalar_advantages(batches)
 
                 # Step 5: Compute KL penalty and discounted returns
                 self._compute_kl_and_returns(
-                    batches, action_log_probs, ref_log_probs, normalized_rewards, group_reward_std
+                    batches, action_log_probs, ref_log_probs, scalar_advantages, group_reward_std
                 )
+                self._normalize_token_advantages(batches)
 
                 # Step 6: Run policy gradient update (clipped PPO-style)
                 status = self._policy_update(batches)

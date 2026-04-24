@@ -184,6 +184,17 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--full_determinism", action="store_true", default=False)
     parser.add_argument("--n_samples_per_prompt", type=int, default=8)
+    parser.add_argument(
+        "--advantage_estimator",
+        type=str,
+        default="group_norm",
+        choices=["group_norm", "reinforce", "reinforce_baseline"],
+        help=(
+            "Advantage estimator for policy updates. group_norm is standard GRPO; "
+            "reinforce is REINFORCE++ with batch-level token advantage normalization; "
+            "reinforce_baseline subtracts the per-prompt sampled mean before token normalization."
+        ),
+    )
     parser.add_argument("--actor_learning_rate", type=float, default=1e-6)
     parser.add_argument("--lr_warmup_ratio", type=float, default=0.03)
     parser.add_argument("--lr_scheduler", type=str, default="cosine_with_min_lr")
@@ -237,7 +248,10 @@ if __name__ == "__main__":
             "You likely want to pass $'\\n' in Bash or \"`n\" in PowerShell."
         )
 
-    assert args.n_samples_per_prompt > 1, "GRPO requires n_samples_per_prompt > 1."
+    if args.advantage_estimator in ("group_norm", "reinforce_baseline"):
+        assert (
+            args.n_samples_per_prompt > 1
+        ), f"{args.advantage_estimator} requires n_samples_per_prompt > 1."
     assert args.vllm_num_engines > 0, "This GRPO path requires vLLM rollout generation."
     assert args.reward_pretrain or args.remote_rm_url, "Either --reward_pretrain or --reward_fn/--remote_rm_url is required."
     if args.vllm_enable_sleep and not args.colocate_all_models:

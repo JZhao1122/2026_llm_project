@@ -110,6 +110,7 @@ python3 -m src.cli.train_grpo \
    --eps_clip "${GRPO_EPS_CLIP:-0.2}" \
    --gamma "${GRPO_GAMMA:-1.0}" \
    --temperature "${GRPO_TEMPERATURE:-0.7}" \
+   --advantage_estimator "${GRPO_ADVANTAGE_ESTIMATOR:-group_norm}" \
    --dist_backend "${GRPO_DIST_BACKEND:-nccl}" \
    --zero_stage "${ZERO_STAGE:-2}" \
    --param_dtype "${PARAM_DTYPE:-bf16}" \
