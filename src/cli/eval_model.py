@@ -63,7 +63,13 @@ def extract_gsm8k_answer(text: str) -> str:
     return candidate.replace(",", "").strip().rstrip(".")
 
 
-def build_gsm8k_prompt(question: str) -> str:
+def build_gsm8k_prompt(question: str, args) -> str:
+    if args.gsm8k_prompt_template:
+        return args.gsm8k_prompt_template.format(question)
+
+    if args.gsm8k_prompt_mode == "raw":
+        return question
+
     return (
         "Solve the following grade-school math problem. "
         "Show your reasoning, and end the final answer with '#### <answer>'.\n\n"
@@ -107,7 +113,7 @@ def evaluate_gsm8k_once(args, tokenizer, repeat_idx: int = 0) -> Dict[str, float
         end = min(start + args.gsm8k_batch_size, len(dataset))
         batch = [dataset[idx] for idx in range(start, end)]
         prompts = [
-            maybe_apply_chat_template(build_gsm8k_prompt(example[args.gsm8k_question_key]), tokenizer, args)
+            maybe_apply_chat_template(build_gsm8k_prompt(example[args.gsm8k_question_key], args), tokenizer, args)
             for example in batch
         ]
         outputs = llm.generate(prompts, sampling_params, use_tqdm=False)
@@ -138,6 +144,8 @@ def evaluate_gsm8k_once(args, tokenizer, repeat_idx: int = 0) -> Dict[str, float
         "split": args.gsm8k_split,
         "num_examples": total,
         "accuracy": correct / total if total else 0.0,
+        "prompt_mode": args.gsm8k_prompt_mode,
+        "prompt_template": args.gsm8k_prompt_template,
         "preview_examples": predictions,
     }
     del llm
@@ -390,6 +398,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gsm8k_split", type=str, default="test")
     parser.add_argument("--gsm8k_question_key", type=str, default="question")
     parser.add_argument("--gsm8k_answer_key", type=str, default="answer")
+    parser.add_argument("--gsm8k_prompt_mode", type=str, default="raw", choices=["raw", "benchmark"])
+    parser.add_argument("--gsm8k_prompt_template", type=str, default=None)
     parser.add_argument("--gsm8k_max_samples", type=int, default=-1)
     parser.add_argument("--gsm8k_batch_size", type=int, default=32)
     parser.add_argument("--gsm8k_max_new_tokens", type=int, default=512)
@@ -420,6 +430,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 def main():
     parser = build_arg_parser()
     args = parser.parse_args()
+    if args.gsm8k_prompt_template and "{}" not in args.gsm8k_prompt_template:
+        raise ValueError("--gsm8k_prompt_template must contain '{}' so the question can be inserted.")
     tasks = parse_tasks(args.tasks)
 
     tokenizer = get_tokenizer(args.model_path, model=None, padding_side="right")

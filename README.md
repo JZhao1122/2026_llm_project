@@ -91,7 +91,9 @@ bash eval_mmlu.sh ./ckpt/qwen2.5-1.5b-sft
 bash eval_all_sft_ckpts.sh
 ```
 
-By default, `eval_gsm8k.sh` now uses `temperature=0.6` and runs `3` sampled repeats, then reports the mean accuracy in `gsm8k.accuracy`. The per-repeat accuracies are also saved in the JSON output as `repeat_accuracies`, and the standard deviation is saved as `std_accuracy`. Override them with `GSM8K_TEMPERATURE` and `GSM8K_NUM_REPEATS` when needed.
+By default, `eval_gsm8k.sh` now uses the raw `question` text as the prompt so it matches the current GRPO training setup (`input_key=question` with no prompt template). It also uses `temperature=0.6` and runs `3` sampled repeats, then reports the mean accuracy in `gsm8k.accuracy`. The per-repeat accuracies are also saved in the JSON output as `repeat_accuracies`, and the standard deviation is saved as `std_accuracy`.
+
+To switch back to the original benchmark-style GSM8K instruction prompt, set `GSM8K_PROMPT_MODE=benchmark`. If you need a custom prompt wrapper, pass `--gsm8k_prompt_template '...{}...'` through `eval_gsm8k.sh`.
 
 ## Key Runtime Variables
 
